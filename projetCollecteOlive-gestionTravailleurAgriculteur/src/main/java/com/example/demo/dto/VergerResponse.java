@@ -1,33 +1,26 @@
 package com.example.demo.dto;
 
 import com.example.demo.model.enums.StatutVerger;
-import jakarta.validation.constraints.*;
+import lombok.Builder;
 import lombok.Data;
+import java.util.Date;
 
 @Data
-public class VergerRequest {
-
-    @NotBlank
+@Builder
+public class VergerResponse {
+    private String id;
     private String nom;
-
-    @NotBlank
     private String proprietaireId;
-
-    @Positive
+    private String proprietaireNom;        // denormalized for display
     private Double superficie;
-
-    @NotBlank
     private String typeOlive;
-
-    @Min(0)
     private Integer nombreArbres;
-
-    @PositiveOrZero
     private Double rendementEstime;
-
-    @Min(0) @Max(100)
     private Integer maturiteActuelle;
-
     private StatutVerger statut;
-
+    private Date dateDerniereRecolte;
+    private Boolean estActif;
+    private Date dateCreation;
+    private String motifRejet;
+    private Boolean supprimer;
 }
