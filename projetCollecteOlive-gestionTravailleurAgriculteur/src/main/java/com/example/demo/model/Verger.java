@@ -8,9 +8,9 @@ import lombok.Builder;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.index.Indexed;
-import java.util.Date;
+import org.springframework.data.mongodb.core.mapping.DocumentReference;
 
+import java.util.Date;
 
 @Data
 @Builder
@@ -21,25 +21,21 @@ public class Verger {
 
     @Id
     private String id;
-
-    private String nom;
-
-    @Indexed
-    private String proprietaireId;         // ref → Utilisateur._id (agriculteur)
+    @DocumentReference(lazy = true)
+    private Utilisateur agriculteur; //reference agriculteur
 
     private Double superficie;             // hectares
     private String typeOlive;             // Chemlali, Chétoui, Picholine…
     private Double rendementEstime;        // kg
-    private Integer maturiteActuelle;      // 0-100 %
+    private Integer maturiteActuelle;     // 0-100 %
+    private int nbArbre;
 
     private StatutVerger statut;
 
     private Date dateDerniereRecolte;
 
     @Builder.Default
-    private Boolean estActif = false;
-    private String motifRejet;
-    private Boolean supprimer= false;
+    private Boolean estSupprimer= false;
 
     @CreatedDate
     private Date dateCreation;

@@ -8,10 +8,7 @@ import lombok.Data;
 public class VergerRequest {
 
     @NotBlank
-    private String nom;
-
-    @NotBlank
-    private String proprietaireId;
+    private String agriculteurId; // renamed from proprietaireId
 
     @Positive
     private Double superficie;
@@ -19,8 +16,8 @@ public class VergerRequest {
     @NotBlank
     private String typeOlive;
 
-    @Min(0)
-    private Integer nombreArbres;
+    @Positive
+    private Integer nbArbre; // renamed from nombreArbres
 
     @PositiveOrZero
     private Double rendementEstime;
@@ -29,5 +26,4 @@ public class VergerRequest {
     private Integer maturiteActuelle;
 
     private StatutVerger statut;
-
 }

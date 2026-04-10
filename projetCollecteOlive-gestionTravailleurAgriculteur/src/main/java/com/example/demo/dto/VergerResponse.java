@@ -9,18 +9,16 @@ import java.util.Date;
 @Builder
 public class VergerResponse {
     private String id;
-    private String nom;
-    private String proprietaireId;
-    private String proprietaireNom;        // denormalized for display
+    private String agriculteurId;
+    private String agriculteurNom;
+    private String agriculteurEmail;
     private Double superficie;
     private String typeOlive;
-    private Integer nombreArbres;
+    private Integer nbArbre;
     private Double rendementEstime;
     private Integer maturiteActuelle;
     private StatutVerger statut;
     private Date dateDerniereRecolte;
-    private Boolean estActif;
+    private Boolean estSupprimer;
     private Date dateCreation;
-    private String motifRejet;
-    private Boolean supprimer;
 }

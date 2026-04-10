@@ -7,5 +7,6 @@ public enum Role {
     AGRICULTEUR,
     EQUIPE_RECOLTE,
     TRANSPORTEUR,
+    TRAVAILLEUR,
     
 }
