@@ -108,10 +108,7 @@ public class VergerServiceImpl implements VergerService {
 
     @Override
     public void verifierProprietaireVerger(String vergerId, UserDetails userDetails) {
-        boolean isResponsable = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE"));
-        if (isResponsable) return;
-
+        if (isPrivileged(userDetails)) return; // ✅ covers both roles
         Verger v = findOrThrow(vergerId);
         if (!v.getAgriculteur().getEmail().equals(userDetails.getUsername())) {
             throw new AccessDeniedException("Vous n'êtes pas le propriétaire de ce verger");
@@ -154,13 +151,21 @@ public class VergerServiceImpl implements VergerService {
     }
     @Override
     public void verifierProprietaire(String agriculteurId, UserDetails userDetails) {
-        boolean isResponsable = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE"));
-        if (isResponsable) return;
+        boolean isPrivileged = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE")
+                        || a.getAuthority().equals("ROLE_ADMIN"));
+        if (isPrivileged) return;
 
         Utilisateur agriculteur = getAgriculteurOrThrow(agriculteurId);
         if (!agriculteur.getEmail().equals(userDetails.getUsername())) {
             throw new AccessDeniedException("Vous ne pouvez pas accéder aux vergers d'un autre agriculteur");
         }
     }
+    private boolean isPrivileged(UserDetails userDetails) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE")
+                        || a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+
 }

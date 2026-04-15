@@ -79,9 +79,9 @@ admin.setCompteActif(true);
             }
             
             // ===== OPTIONAL: Create a test AGRICULTEUR user =====
-            if (utilisateurRepository.findByEmail("agriculteur@test.com").isEmpty()) {
+            if (utilisateurRepository.findByEmail("agriculteur2@test.com").isEmpty()) {
                 Utilisateur agriculteur = new Utilisateur();
-                agriculteur.setEmail("agriculteur@test.com");
+                agriculteur.setEmail("agriculteur2@test.com");
                 agriculteur.setPrenom("Mohamed");
                 agriculteur.setNom("Ben Ali");
                 agriculteur.setTelephone("+216 55 555 555");
