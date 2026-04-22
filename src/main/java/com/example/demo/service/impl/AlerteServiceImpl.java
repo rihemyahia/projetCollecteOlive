@@ -216,6 +216,14 @@ public class AlerteServiceImpl implements AlerteService {
     }
 
     @Override
+    public AlerteResponse changerUrgence(String id, NiveauUrgence urgence,UserDetails userDetails) {
+        AlerteTerrain alerte = findOrThrow(id);
+        alerte.setNiveauUrgence(urgence);
+        alerte.setDateMiseAJour(new Date());
+        return toResponse(alerteRepo.save(alerte));
+    }
+
+    @Override
     public void supprimer(String id) {
         AlerteTerrain alerte = findOrThrow(id);
         alerte.setEstSupprimer(true);
@@ -303,16 +311,24 @@ public class AlerteServiceImpl implements AlerteService {
     @Override
     public void verifyResponsableOwnsAlert(String alerteId, UserDetails userDetails) {
         AlerteTerrain alerte = findOrThrow(alerteId);
-        Verger verger = alerte.getVerger();
-        
-        if (verger == null || verger.getResponsable() == null) {
-            throw new AccessDeniedException("This alert has no assigned responsable");
-        }
-        
+
         Utilisateur responsable = utilisateurRepo.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Responsable not found"));
-        
-        if (!verger.getResponsable().getId().equals(responsable.getId())) {
+
+        Verger verger = alerte.getVerger();
+        if (verger == null || verger.getId() == null) {
+            throw new AccessDeniedException("This alert is not linked to a valid verger");
+        }
+
+        // Always verify against the current verger in DB (more reliable than embedded alert snapshot)
+        Verger vergerFromDb = vergerRepo.findById(verger.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Verger not found"));
+
+        if (vergerFromDb.getResponsable() == null || vergerFromDb.getResponsable().getId() == null) {
+            throw new AccessDeniedException("This verger has no assigned responsable");
+        }
+
+        if (!vergerFromDb.getResponsable().getId().equals(responsable.getId())) {
             throw new AccessDeniedException("You do not have permission to access this alert");
         }
     }
@@ -324,6 +340,15 @@ public class AlerteServiceImpl implements AlerteService {
         
         // If ownership check passed, proceed with status change
         return changerStatut(id, statut);
+    }
+
+    @Override
+    public AlerteResponse changerUrgenceForResponsable(String id, NiveauUrgence urgence, UserDetails userDetails) {
+        // Verify responsable owns the alert
+        verifyResponsableOwnsAlert(id, userDetails);
+
+        // If ownership check passed, proceed with urgency change
+        return changerUrgence(id, urgence, userDetails);
     }
 
     @Override
