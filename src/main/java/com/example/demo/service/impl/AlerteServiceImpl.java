@@ -12,6 +12,7 @@ import com.example.demo.repository.AlerteRepository;
 import com.example.demo.repository.UtilisateurRepository;
 import com.example.demo.repository.VergerRepository;
 import com.example.demo.service.AlerteService;
+import com.example.demo.service.CloudinaryService;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
@@ -19,6 +20,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.List;
@@ -32,6 +34,7 @@ public class AlerteServiceImpl implements AlerteService {
     private final AlerteRepository alerteRepo;
     private final UtilisateurRepository utilisateurRepo;
     private final VergerRepository vergerRepo;
+    private final CloudinaryService cloudinaryService;
 
     @Override
     public AlerteResponse signalerProbleme(AlerteRequest req) {
@@ -360,6 +363,31 @@ public class AlerteServiceImpl implements AlerteService {
         return marquerTraitee(id, commentaire);
     }
 
+    @Override
+    public AlerteResponse ajouterPhotos(String alerteId, MultipartFile[] files, UserDetails userDetails) {
+
+        verifierProprietaireAlerte(alerteId, userDetails);
+
+        if (files == null || files.length == 0) {
+            return toResponse(findOrThrow(alerteId));
+        }
+        if (files.length > 3) {
+            throw new IllegalArgumentException("Maximum 3 photos autorisées par alerte");
+        }
+
+        AlerteTerrain alerte = findOrThrow(alerteId);
+
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) continue;
+
+            String url = cloudinaryService.uploadAlertImage(alerteId, file);
+            alerte.getPhotoUrls().add(url);
+        }
+
+        alerte.setDateMiseAJour(new Date());
+        return toResponse(alerteRepo.save(alerte));
+    }
+
     private AlerteResponse toResponse(AlerteTerrain a) {
         Utilisateur ag = a.getAgriculteur();
         Verger v = a.getVerger();
@@ -372,6 +400,7 @@ public class AlerteServiceImpl implements AlerteService {
                 .vergerTypeOlive(v != null ? v.getTypeOlive() : null)
                 .type(a.getType())
                 .description(a.getDescription())
+                .photoUrls(a.getPhotoUrls())
                 .geolocalisation(a.getGeolocalisation())
                 .phase(a.getPhase())
                 .niveauUrgence(a.getNiveauUrgence())

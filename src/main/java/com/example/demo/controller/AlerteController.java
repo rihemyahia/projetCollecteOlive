@@ -15,6 +15,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 import com.example.demo.repository.UtilisateurRepository;
 import java.util.List;
 
@@ -37,6 +39,17 @@ public class AlerteController {
             throw new AccessDeniedException("Cannot create alert for another farmer");
         }
         return ResponseEntity.ok(alerteService.signalerProbleme(req));
+    }
+
+    @PostMapping(path = "/{id}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('AGRICULTEUR')")
+    public ResponseEntity<AlerteResponse> ajouterPhotos(
+            @PathVariable String id,
+    @RequestPart(name = "files", required = false)
+    MultipartFile[] files,            
+    @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        return ResponseEntity.ok(alerteService.ajouterPhotos(id, files, userDetails));
     }
     // Helper method
 
