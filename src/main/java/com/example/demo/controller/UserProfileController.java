@@ -39,10 +39,38 @@ public class UserProfileController {
         Utilisateur utilisateur = utilisateurRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         Utilisateur misAJour = authServiceImpl.mettreAJourProfil(utilisateur.getId(), updates);
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Profil mis à jour avec succès");
         response.put("utilisateur", misAJour);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Dedicated endpoint for uploading the logged-in user's profile photo.
+     * Body: { "photoProfile": "data:image/jpeg;base64,..." }
+     * Kept separate so it is clear and the base64 payload doesn't mix with
+     * other profile fields in the general PUT.
+     */
+    @PutMapping("/photo")
+    public ResponseEntity<Map<String, Object>> updatePhoto(
+            Authentication authentication,
+            @RequestBody Map<String, Object> body) {
+        String email = authentication.getName();
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        String photoBase64 = (String) body.get("photoProfile");
+        if (photoBase64 == null || photoBase64.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Photo manquante"));
+        }
+
+        utilisateur.setPhotoProfile(photoBase64);
+        utilisateurRepository.save(utilisateur);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Photo de profil mise à jour avec succès");
+        response.put("photoProfile", utilisateur.getPhotoProfile());
         return ResponseEntity.ok(response);
     }
 
@@ -53,13 +81,13 @@ public class UserProfileController {
         String email = authentication.getName();
         Utilisateur utilisateur = utilisateurRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-        
+
         authServiceImpl.changerMotDePasse(
-            utilisateur.getId(),
-            request.get("ancienMotDePasse"),
-            request.get("nouveauMotDePasse")
+                utilisateur.getId(),
+                request.get("ancienMotDePasse"),
+                request.get("nouveauMotDePasse")
         );
-        
+
         Map<String, String> response = new HashMap<>();
         response.put("message", "Mot de passe changé avec succès");
         return ResponseEntity.ok(response);

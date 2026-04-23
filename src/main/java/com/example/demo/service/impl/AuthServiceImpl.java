@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-public class AuthServiceImpl implements com.example.demo.service.AuthService{
+public class AuthServiceImpl implements com.example.demo.service.AuthService {
 
     @Autowired
     private UtilisateurRepository utilisateurRepository;
@@ -84,26 +84,12 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
 
         System.out.println("✅ Admin a changé le mot de passe pour: " + utilisateur.getEmail());
     }
-    public Map<String, Object> login(String email, String motDePasse) {
-        System.out.println("🔐 Tentative de connexion pour: " + email);
-        System.out.println("📝 Mot de passe saisi (length): " + motDePasse.length());
-        System.out.println("📝 Mot de passe saisi: '" + motDePasse + "'");
 
+    public Map<String, Object> login(String email, String motDePasse) {
         Utilisateur utilisateur = utilisateurRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-        System.out.println("👤 Utilisateur trouvé: " + utilisateur.getEmail());
-        System.out.println("🔑 Mot de passe stocké (encoded): " + utilisateur.getMotDePasse());
-        System.out.println("📊 compteActif: " + utilisateur.isCompteActif());
-        System.out.println("📊 estActif: " + utilisateur.getEstActif());
-
-        boolean matches = passwordEncoder.matches(motDePasse, utilisateur.getMotDePasse());
-        System.out.println("✅ Password matches: " + matches);
-
-        if (!matches) {
-            // Try to see if the password was encoded differently
-            System.out.println("❌ Password mismatch!");
-            System.out.println("💡 Tip: Make sure you're using the exact password that was generated");
+        if (!passwordEncoder.matches(motDePasse, utilisateur.getMotDePasse())) {
             throw new RuntimeException("Mot de passe incorrect");
         }
 
@@ -117,17 +103,10 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
                 utilisateur.getId()
         );
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", utilisateur.getId());
-        response.put("email", utilisateur.getEmail());
-        response.put("prenom", utilisateur.getPrenom());
-        response.put("nom", utilisateur.getNom());
-        response.put("role", utilisateur.getRole());
-        response.put("token", token);
-        response.put("compteActif", utilisateur.isCompteActif());
-
+        Map<String, Object> response = buildAuthResponse(utilisateur, token);
         return response;
     }
+
     public Map<String, Object> loginResponsable(String email, String motDePasse) {
         Utilisateur utilisateur = utilisateurRepository.findByEmailAndRole(email, Role.RESPONSABLE)
                 .orElseThrow(() -> new RuntimeException("Accès réservé aux responsables"));
@@ -135,21 +114,14 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         if (!passwordEncoder.matches(motDePasse, utilisateur.getMotDePasse())) {
             throw new RuntimeException("Mot de passe incorrect");
         }
+
         String token = jwtUtils.generateToken(
                 utilisateur.getEmail(),
                 utilisateur.getRole().toString(),
                 utilisateur.getId()
         );
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", utilisateur.getId());
-        response.put("email", utilisateur.getEmail());
-        response.put("prenom", utilisateur.getPrenom());
-        response.put("nom", utilisateur.getNom());
-        response.put("role", utilisateur.getRole());
-        response.put("token", token);
-
-        return response;
+        return buildAuthResponse(utilisateur, token);
     }
 
     public Map<String, Object> loginAdmin(String email, String motDePasse) {
@@ -159,12 +131,20 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         if (!passwordEncoder.matches(motDePasse, utilisateur.getMotDePasse())) {
             throw new RuntimeException("Mot de passe incorrect");
         }
+
         String token = jwtUtils.generateToken(
                 utilisateur.getEmail(),
                 utilisateur.getRole().toString(),
                 utilisateur.getId()
         );
 
+        return buildAuthResponse(utilisateur, token);
+    }
+
+    /**
+     * Helper: builds login response including photoProfile.
+     */
+    private Map<String, Object> buildAuthResponse(Utilisateur utilisateur, String token) {
         Map<String, Object> response = new HashMap<>();
         response.put("id", utilisateur.getId());
         response.put("email", utilisateur.getEmail());
@@ -173,37 +153,29 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         response.put("role", utilisateur.getRole());
         response.put("token", token);
         response.put("compteActif", utilisateur.isCompteActif());
-
+        // Include photoProfile so the frontend can display it in the sidebar/navbar immediately after login
+        response.put("photoProfile", utilisateur.getPhotoProfile());
         return response;
     }
 
-    // ========== ADMIN : CRÉATION D'UTILISATEURS AVEC MOT DE PASSE GÉNÉRÉ ==========
+    // ========== ADMIN : CRÉATION D'UTILISATEURS ==========
 
     public Map<String, Object> creerUtilisateurParAdmin(Utilisateur utilisateur) {
-        System.out.println("👑 Admin création utilisateur: " + utilisateur.getEmail() + " avec rôle: " + utilisateur.getRole());
-
-        // Vérifier que l'email n'existe pas déjà
         if (utilisateurRepository.existsByEmail(utilisateur.getEmail())) {
             throw new RuntimeException("Un utilisateur avec cet email existe déjà");
         }
 
-        // Générer un mot de passe sécurisé
         String motDePasseGenere = passwordGeneratorUtil.generateSecurePassword();
-        System.out.println("🔑 Mot de passe généré pour " + utilisateur.getEmail() + ": " + motDePasseGenere);
 
-        // Encoder le mot de passe
         utilisateur.setMotDePasse(passwordEncoder.encode(motDePasseGenere));
         utilisateur.setEstActif(true);
         utilisateur.setCompteActif(true);
         utilisateur.setDateCreation(new Date());
 
-        // Validation selon le rôle
         validateUserByRole(utilisateur);
 
         Utilisateur saved = utilisateurRepository.save(utilisateur);
-        System.out.println("✅ Admin a créé un utilisateur: " + saved.getEmail() + " avec rôle: " + saved.getRole());
 
-        // Envoyer l'email avec le mot de passe généré
         try {
             emailService.envoyerMotDePasse(
                     saved.getEmail(),
@@ -211,14 +183,14 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
                     saved.getPrenom(),
                     motDePasseGenere
             );
-            System.out.println("✅ Email envoyé à " + saved.getEmail() + " avec le mot de passe");
         } catch (Exception e) {
             System.err.println("❌ Erreur lors de l'envoi de l'email: " + e.getMessage());
         }
+
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Utilisateur créé avec succès");
         response.put("utilisateur", saved);
-        response.put("motDePasseGenere", motDePasseGenere); // Pour debug, à retirer en prod
+        response.put("motDePasseGenere", motDePasseGenere);
         return response;
     }
 
@@ -259,10 +231,9 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         }
     }
 
-    // ========== MÉTHODES DE GESTION DES UTILISATEURS ==========
+    // ========== GESTION DES UTILISATEURS ==========
 
     public Utilisateur creerUtilisateur(Utilisateur utilisateur) {
-        System.out.println("📝 Création d'un nouvel utilisateur: " + utilisateur.getEmail());
         utilisateur.setMotDePasse(passwordEncoder.encode(utilisateur.getMotDePasse()));
         utilisateur.setEstActif(true);
         utilisateur.setCompteActif(true);
@@ -281,13 +252,11 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
     public Utilisateur mettreAJourUtilisateur(String id, Utilisateur utilisateur) {
         Utilisateur existant = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         existant.setNom(utilisateur.getNom());
         existant.setPrenom(utilisateur.getPrenom());
         existant.setTelephone(utilisateur.getTelephone());
         existant.setRole(utilisateur.getRole());
         existant.setAdresse(utilisateur.getAdresse());
-
         return utilisateurRepository.save(existant);
     }
 
@@ -311,7 +280,8 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         }
     }
 
-    // ========== MÉTHODES POUR L'ADMIN (ACTIVATION) ==========
+    // ========== ACTIVATION / DÉSACTIVATION ==========
+
     public List<Utilisateur> getAgriculteursEnAttente() {
         return utilisateurRepository.findByRoleAndCompteActifFalse(Role.AGRICULTEUR);
     }
@@ -327,66 +297,42 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
     public Utilisateur activerAgriculteur(String id, String nouveauMotDePasse) {
         Utilisateur agriculteur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Agriculteur non trouvé"));
-
-        if (agriculteur.getRole() != Role.AGRICULTEUR) {
+        if (agriculteur.getRole() != Role.AGRICULTEUR)
             throw new RuntimeException("Cet utilisateur n'est pas un agriculteur");
-        }
-
-        if (agriculteur.isCompteActif()) {
-            throw new RuntimeException("Le compte de cet agriculteur est déjà activé");
-        }
-
+        if (agriculteur.isCompteActif())
+            throw new RuntimeException("Le compte est déjà activé");
         agriculteur.setMotDePasse(passwordEncoder.encode(nouveauMotDePasse));
         agriculteur.setCompteActif(true);
         agriculteur.setEstActif(true);
-
         Utilisateur sauvegarde = utilisateurRepository.save(agriculteur);
         try {
-            emailService.envoyerMotDePasse(
-                    agriculteur.getEmail(),
-                    agriculteur.getNom(),
-                    agriculteur.getPrenom(),
-                    nouveauMotDePasse
-            );
+            emailService.envoyerMotDePasse(agriculteur.getEmail(), agriculteur.getNom(), agriculteur.getPrenom(), nouveauMotDePasse);
         } catch (Exception e) {
             System.err.println("❌ Erreur email: " + e.getMessage());
         }
-
         return sauvegarde;
     }
 
     public Utilisateur activerTravailleur(String id, String nouveauMotDePasse) {
         Utilisateur travailleur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Travailleur non trouvé"));
-
-        if (travailleur.getRole() != Role.TRAVAILLEUR) {
+        if (travailleur.getRole() != Role.TRAVAILLEUR)
             throw new RuntimeException("Cet utilisateur n'est pas un travailleur");
-        }
-
-        if (travailleur.isCompteActif()) {
-            throw new RuntimeException("Le compte de ce travailleur est déjà activé");
-        }
-
+        if (travailleur.isCompteActif())
+            throw new RuntimeException("Le compte est déjà activé");
         travailleur.setMotDePasse(passwordEncoder.encode(nouveauMotDePasse));
         travailleur.setCompteActif(true);
         travailleur.setEstActif(true);
-
         Utilisateur sauvegarde = utilisateurRepository.save(travailleur);
-
         try {
-            emailService.envoyerMotDePasse(
-                    travailleur.getEmail(),
-                    travailleur.getNom(),
-                    travailleur.getPrenom(),
-                    nouveauMotDePasse
-            );
+            emailService.envoyerMotDePasse(travailleur.getEmail(), travailleur.getNom(), travailleur.getPrenom(), nouveauMotDePasse);
         } catch (Exception e) {
             System.err.println("❌ Erreur email: " + e.getMessage());
         }
-
         return sauvegarde;
     }
-    // ========== GESTION DU PROFIL UTILISATEUR ==========
+
+    // ========== PROFIL UTILISATEUR ==========
 
     public Map<String, Object> getProfil(String id) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
@@ -399,48 +345,43 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         profil.put("telephone", utilisateur.getTelephone());
         profil.put("adresse", utilisateur.getAdresse());
         profil.put("role", utilisateur.getRole());
+        // ← Return photo so the profile page can display it
+        profil.put("photoProfile", utilisateur.getPhotoProfile());
         return profil;
     }
 
     public Utilisateur mettreAJourProfil(String id, Map<String, Object> updates) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-        if (updates.containsKey("nom")) {
+        if (updates.containsKey("nom"))
             utilisateur.setNom((String) updates.get("nom"));
-        }
-        if (updates.containsKey("prenom")) {
+        if (updates.containsKey("prenom"))
             utilisateur.setPrenom((String) updates.get("prenom"));
-        }
-        if (updates.containsKey("telephone")) {
+        if (updates.containsKey("telephone"))
             utilisateur.setTelephone((String) updates.get("telephone"));
-        }
-        if (updates.containsKey("adresse")) {
+        if (updates.containsKey("adresse"))
             utilisateur.setAdresse((String) updates.get("adresse"));
-        }
+        // ← Persist photoProfile when updated from the profile page
+        if (updates.containsKey("photoProfile"))
+            utilisateur.setPhotoProfile((String) updates.get("photoProfile"));
         return utilisateurRepository.save(utilisateur);
     }
 
     public void changerMotDePasse(String id, String ancienMotDePasse, String nouveauMotDePasse) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         if (!passwordEncoder.matches(ancienMotDePasse, utilisateur.getMotDePasse())) {
             throw new RuntimeException("Ancien mot de passe incorrect");
         }
-
         utilisateur.setMotDePasse(passwordEncoder.encode(nouveauMotDePasse));
         utilisateurRepository.save(utilisateur);
     }
 
-    // ========== ADMIN : DÉSACTIVER COMPTE ==========
-
     public Utilisateur desactiverCompte(String id) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
         utilisateur.setCompteActif(false);
         utilisateur.setEstActif(false);
-
         return utilisateurRepository.save(utilisateur);
     }
 
@@ -457,15 +398,11 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
     public Utilisateur activerCompte(String id, String nouveauMotDePasse) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
-
-        if (utilisateur.isCompteActif()) {
+        if (utilisateur.isCompteActif())
             throw new RuntimeException("Le compte est déjà activé");
-        }
-
         utilisateur.setMotDePasse(passwordEncoder.encode(nouveauMotDePasse));
         utilisateur.setCompteActif(true);
         utilisateur.setEstActif(true);
-
         return utilisateurRepository.save(utilisateur);
     }
 

@@ -1,15 +1,11 @@
 package com.example.demo.model;
 
-import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.AllArgsConstructor;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.DBRef;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -41,9 +37,11 @@ public class Utilisateur {
     private Boolean estActif;
 
     private Date dateCreation;
-    private boolean compteActif;  // Note: changed from 'ACompte' to 'aCompte' pour convention Java
+    private boolean compteActif;
 
-    // ========== ATTRIBUTS POUR ROLE: ADMIN ==========
+    // ========== PHOTO DE PROFIL (Base64) ==========
+    // Stored as a Base64 data URL string, e.g. "data:image/jpeg;base64,..."
+    private String photoProfile;
 
     // ========== ATTRIBUTS POUR ROLE: RESPONSABLE ==========
     private String fonction;
@@ -52,7 +50,9 @@ public class Utilisateur {
     // ========== ATTRIBUTS POUR ROLE: AGRICULTEUR ==========
     private String nomExploitation;
     private List<Verger> vergers;
-    @Indexed(unique = true)    // ========== ATTRIBUTS POUR ROLE: EQUIPE_RECOLTE ==========
+
+    // ========== ATTRIBUTS POUR ROLE: EQUIPE_RECOLTE ==========
+    @Indexed(unique = true)
     private String cin;
     private List<String> specialites;
     private List<Collecte> collectesAssignees;
