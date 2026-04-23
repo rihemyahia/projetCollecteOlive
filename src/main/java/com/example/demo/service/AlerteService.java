@@ -5,6 +5,7 @@ import com.example.demo.dto.AlerteResponse;
 import com.example.demo.model.enums.NiveauUrgence;
 import com.example.demo.model.enums.StatutAlerte;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -23,10 +24,14 @@ public interface AlerteService {
     List<AlerteResponse> getNearbyAlertsForResponsable(Double longitude, Double latitude, UserDetails userDetails);
     AlerteResponse marquerTraitee(String id, String commentaire);
     AlerteResponse changerStatut(String id, StatutAlerte statut);
+    AlerteResponse changerUrgence(String id, NiveauUrgence urgence, UserDetails userDetails);
     void supprimer(String id);
     void verifierProprietaireAlerte(String alerteId, UserDetails userDetails);
     void verifyResponsableOwnsVerger(String vergerId, UserDetails userDetails);
     void verifyResponsableOwnsAlert(String alerteId, UserDetails userDetails);
     AlerteResponse changerStatutForResponsable(String id, StatutAlerte statut, UserDetails userDetails);
+    AlerteResponse changerUrgenceForResponsable(String id, NiveauUrgence urgence, UserDetails userDetails);
     AlerteResponse marquerTraiteeForResponsable(String id, String commentaire, UserDetails userDetails);
+
+    AlerteResponse ajouterPhotos(String alerteId, MultipartFile[] files, UserDetails userDetails);
 }

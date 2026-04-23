@@ -12,6 +12,7 @@ import com.example.demo.repository.AlerteRepository;
 import com.example.demo.repository.UtilisateurRepository;
 import com.example.demo.repository.VergerRepository;
 import com.example.demo.service.AlerteService;
+import com.example.demo.service.CloudinaryService;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
@@ -19,6 +20,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.List;
@@ -32,6 +34,7 @@ public class AlerteServiceImpl implements AlerteService {
     private final AlerteRepository alerteRepo;
     private final UtilisateurRepository utilisateurRepo;
     private final VergerRepository vergerRepo;
+    private final CloudinaryService cloudinaryService;
 
     @Override
     public AlerteResponse signalerProbleme(AlerteRequest req) {
@@ -216,6 +219,14 @@ public class AlerteServiceImpl implements AlerteService {
     }
 
     @Override
+    public AlerteResponse changerUrgence(String id, NiveauUrgence urgence,UserDetails userDetails) {
+        AlerteTerrain alerte = findOrThrow(id);
+        alerte.setNiveauUrgence(urgence);
+        alerte.setDateMiseAJour(new Date());
+        return toResponse(alerteRepo.save(alerte));
+    }
+
+    @Override
     public void supprimer(String id) {
         AlerteTerrain alerte = findOrThrow(id);
         alerte.setEstSupprimer(true);
@@ -303,16 +314,24 @@ public class AlerteServiceImpl implements AlerteService {
     @Override
     public void verifyResponsableOwnsAlert(String alerteId, UserDetails userDetails) {
         AlerteTerrain alerte = findOrThrow(alerteId);
-        Verger verger = alerte.getVerger();
-        
-        if (verger == null || verger.getResponsable() == null) {
-            throw new AccessDeniedException("This alert has no assigned responsable");
-        }
-        
+
         Utilisateur responsable = utilisateurRepo.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Responsable not found"));
-        
-        if (!verger.getResponsable().getId().equals(responsable.getId())) {
+
+        Verger verger = alerte.getVerger();
+        if (verger == null || verger.getId() == null) {
+            throw new AccessDeniedException("This alert is not linked to a valid verger");
+        }
+
+        // Always verify against the current verger in DB (more reliable than embedded alert snapshot)
+        Verger vergerFromDb = vergerRepo.findById(verger.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Verger not found"));
+
+        if (vergerFromDb.getResponsable() == null || vergerFromDb.getResponsable().getId() == null) {
+            throw new AccessDeniedException("This verger has no assigned responsable");
+        }
+
+        if (!vergerFromDb.getResponsable().getId().equals(responsable.getId())) {
             throw new AccessDeniedException("You do not have permission to access this alert");
         }
     }
@@ -327,12 +346,46 @@ public class AlerteServiceImpl implements AlerteService {
     }
 
     @Override
+    public AlerteResponse changerUrgenceForResponsable(String id, NiveauUrgence urgence, UserDetails userDetails) {
+        // Verify responsable owns the alert
+        verifyResponsableOwnsAlert(id, userDetails);
+
+        // If ownership check passed, proceed with urgency change
+        return changerUrgence(id, urgence, userDetails);
+    }
+
+    @Override
     public AlerteResponse marquerTraiteeForResponsable(String id, String commentaire, UserDetails userDetails) {
         // Verify responsable owns the alert
         verifyResponsableOwnsAlert(id, userDetails);
         
         // If ownership check passed, proceed with marking as treated
         return marquerTraitee(id, commentaire);
+    }
+
+    @Override
+    public AlerteResponse ajouterPhotos(String alerteId, MultipartFile[] files, UserDetails userDetails) {
+
+        verifierProprietaireAlerte(alerteId, userDetails);
+
+        if (files == null || files.length == 0) {
+            return toResponse(findOrThrow(alerteId));
+        }
+        if (files.length > 3) {
+            throw new IllegalArgumentException("Maximum 3 photos autorisées par alerte");
+        }
+
+        AlerteTerrain alerte = findOrThrow(alerteId);
+
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) continue;
+
+            String url = cloudinaryService.uploadAlertImage(alerteId, file);
+            alerte.getPhotoUrls().add(url);
+        }
+
+        alerte.setDateMiseAJour(new Date());
+        return toResponse(alerteRepo.save(alerte));
     }
 
     private AlerteResponse toResponse(AlerteTerrain a) {
@@ -347,6 +400,7 @@ public class AlerteServiceImpl implements AlerteService {
                 .vergerTypeOlive(v != null ? v.getTypeOlive() : null)
                 .type(a.getType())
                 .description(a.getDescription())
+                .photoUrls(a.getPhotoUrls())
                 .geolocalisation(a.getGeolocalisation())
                 .phase(a.getPhase())
                 .niveauUrgence(a.getNiveauUrgence())

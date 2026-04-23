@@ -2,10 +2,12 @@ package com.example.demo.model.enums;
 
 
 public enum TypeAlerte {
+    MATURITE,
     MALADIE,
     NUISIBLE,
     IRRIGATION,
     METEO,
+    RECOLTE,
     AUTRE,
     MATURITE_ACCELEREE,
     CHUTE_PREMATUREE,
