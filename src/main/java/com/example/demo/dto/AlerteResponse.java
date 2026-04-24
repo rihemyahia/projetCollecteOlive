@@ -8,6 +8,7 @@ import com.example.demo.model.enums.TypeAlerte;
 import lombok.Builder;
 import lombok.Data;
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Builder
@@ -20,6 +21,7 @@ public class AlerteResponse {
     private String vergerTypeOlive;
     private TypeAlerte type;
     private String description;
+    private List<String> photoUrls;
     private Geolocalisation geolocalisation;
     private PhaseCulturale phase;
     private NiveauUrgence niveauUrgence;
