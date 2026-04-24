@@ -5,17 +5,22 @@ import com.example.demo.repository.UtilisateurRepository;
 import com.example.demo.service.impl.AuthServiceImpl;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import com.example.demo.service.CloudinaryService;
+import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
 import java.util.Map;
-
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/profile")
 @CrossOrigin(origins = "http://localhost:4200")
 public class UserProfileController {
+    private final CloudinaryService cloudinaryService;
 
     @Autowired
     private AuthServiceImpl authServiceImpl;
@@ -30,26 +35,35 @@ public class UserProfileController {
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         return ResponseEntity.ok(authServiceImpl.getProfil(utilisateur.getId()));
     }
-    @PutMapping("/photo")
+    @PutMapping(value = "/photo", consumes = "multipart/form-data")
     public ResponseEntity<Map<String, Object>> updatePhoto(
             Authentication authentication,
-            @RequestBody Map<String, Object> body) {
+            @RequestPart("file") MultipartFile file) {
+
         String email = authentication.getName();
         Utilisateur utilisateur = utilisateurRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
 
-        String photoBase64 = (String) body.get("photoProfile");
-        if (photoBase64 == null || photoBase64.isBlank()) {
+        if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Photo manquante"));
         }
 
-        utilisateur.setPhotoProfile(photoBase64);
-        utilisateurRepository.save(utilisateur);
+        try {
+            // Upload to Cloudinary (using your existing Cloudinary service)
+            String cloudinaryUrl = cloudinaryService.uploadAlertImage("profile",file); // Your existing method
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Photo de profil mise à jour avec succès");
-        response.put("photoProfile", utilisateur.getPhotoProfile());
-        return ResponseEntity.ok(response);
+            // Save the Cloudinary URL in the database
+            utilisateur.setPhotoProfile(cloudinaryUrl);
+            utilisateurRepository.save(utilisateur);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Photo de profil mise à jour avec succès");
+            response.put("photoProfile", utilisateur.getPhotoProfile());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur lors du téléchargement de la photo: " + e.getMessage()));
+        }
     }
 
     @PutMapping
