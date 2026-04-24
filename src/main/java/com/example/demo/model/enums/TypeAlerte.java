@@ -16,20 +16,7 @@ public enum TypeAlerte {
     LOGISTIQUE_MOULIN,
     SECURITE_RECOLTE,
     RENDEMENT_ANORMAL,
-    MATURITE,
-    RECOLTE;
 
-    @JsonCreator
-    public static TypeAlerte fromString(String value) {
-        if (value == null) return null;
-        try {
-            // Converts "recolte" or "RECOLTE " to "RECOLTE"
-            return TypeAlerte.valueOf(value.toUpperCase().trim());
-        } catch (IllegalArgumentException e) {
-            // 🛡️ THE SAFETY NET:
-            // If the DB has a value we haven't added here yet,
-            // return AUTRE instead of crashing with a 400 error.
-            return AUTRE;
-        }
-    }
+
+
 }
