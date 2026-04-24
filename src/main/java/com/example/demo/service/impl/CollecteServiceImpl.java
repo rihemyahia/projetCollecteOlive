@@ -16,9 +16,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,23 @@ public class CollecteServiceImpl implements CollecteService {
     public Collecte getById(String id) {
         return collecteRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Collecte non trouvée: " + id));
+    }
+    @Override
+    public List<Collecte> getCollectesByResponsable(String responsableId) {
+        // Récupérer tous les vergers assignés à ce responsable
+        List<Verger> vergersResponsable = vergerRepo.findByResponsableIdAndEstSupprimerFalse(responsableId);
+        
+        if (vergersResponsable.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Récupérer les IDs des vergers
+        List<String> vergerIds = vergersResponsable.stream()
+                .map(Verger::getId)
+                .collect(Collectors.toList());
+        
+        // Récupérer les collectes pour ces vergers
+        return collecteRepo.findByVergerIdIn(vergerIds);
     }
 
     @Override
@@ -109,6 +128,9 @@ public class CollecteServiceImpl implements CollecteService {
         Verger verger = null;
         if (collecte.getVergerId() != null) {
             verger = vergerRepo.findById(collecte.getVergerId()).orElse(null);
+            if (verger != null && Boolean.TRUE.equals(verger.getEstSupprimer())) {
+                verger = null;
+            }
         } else if (!tournees.isEmpty()) {
             verger = tournees.get(0).getVerger();
         }
@@ -202,7 +224,7 @@ public class CollecteServiceImpl implements CollecteService {
         // ✅ Vérifier si le verger est entièrement récolté pour clôturer la collecte
         if (collecte.getVergerId() != null) {
             Verger verger = vergerRepo.findById(collecte.getVergerId()).orElse(null);
-            if (verger != null && totalArbresRecoltes >= verger.getNbArbre()) {
+            if (verger != null && Boolean.FALSE.equals(verger.getEstSupprimer()) && totalArbresRecoltes >= verger.getNbArbre()) {
                 collecte.setEstCloturee(true);
                 collecte.setDateFinCampagne(new Date());
                 collecte.setStatut(StatutCollecte.TERMINEE);

@@ -42,27 +42,19 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/login/responsable").permitAll()
                         .requestMatchers("/api/auth/login/admin").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
 
-                        // ADMIN only endpoints
+                        .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
+
                         .requestMatchers(HttpMethod.DELETE, "/api/auth/utilisateurs/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-
                         .requestMatchers("/api/auth/utilisateurs").hasRole("ADMIN")
                         .requestMatchers("/api/auth/utilisateurs/**").hasRole("ADMIN")
                         .requestMatchers("/api/tableau-de-bord/**").hasRole("ADMIN")
-                        .requestMatchers("/api/collectes/**").permitAll()  // TEMPORAIRE pour tester
-
-                        // ADMIN and RESPONSABLE endpoints
+                        .requestMatchers("/api/collectes/**").permitAll()
                         .requestMatchers("/api/responsable/**").hasAnyRole("ADMIN", "RESPONSABLE")
                         .requestMatchers("/api/vergers/**").hasAnyRole("ADMIN", "RESPONSABLE", "AGRICULTEUR")
-                        // ADMIN, RESPONSABLE, and AGRICULTEUR endpoints
                         .requestMatchers("/api/alertes/**").hasAnyRole("ADMIN", "RESPONSABLE", "AGRICULTEUR")
-
-                        // ADMIN, RESPONSABLE, and EQUIPE_RECOLTE endpoints
                         .requestMatchers("/api/tournees/**").hasAnyRole("ADMIN", "RESPONSABLE", "EQUIPE_RECOLTE")
-                        .requestMatchers("/api/travailleurs/**").hasRole("RESPONSABLE")  // Only admin can access worker management
-
-                        // All other requests require authentication
+                        .requestMatchers("/api/travailleurs/**").hasRole("RESPONSABLE")
                         .anyRequest().authenticated()
                 )
                 .userDetailsService(userDetailsService)

@@ -16,6 +16,7 @@ public interface VergerService {
     List<VergerResponse> getByResponsable(UserDetails userDetails);
     List<VergerResponse> getByStatut(StatutVerger statut);
     VergerResponse mettreAJour(String id, VergerRequest request);
+    VergerResponse mettreAJourAdmin(String id, VergerRequest request);
     VergerResponse changerStatut(String id, StatutVerger statut);
     void desactiver(String id);
     void verifierProprietaireVerger(String vergerId, UserDetails userDetails);

@@ -21,9 +21,17 @@ public class AuthController {
 
     @Autowired
     private UtilisateurRepository utilisateurRepository;
-
-    // ========== AUTHENTIFICATION ==========
-
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/admin/utilisateurs/{id}/photo")
+    public ResponseEntity<Map<String, Object>> updatePhotoAdmin(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+        utilisateur.setPhotoProfile((String) body.get("photoProfile"));
+        utilisateurRepository.save(utilisateur);
+        return ResponseEntity.ok(Map.of("message", "Photo mise à jour"));
+    }
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> request) {
         return ResponseEntity.ok(authServiceImpl.login(request.get("email"), request.get("motDePasse")));

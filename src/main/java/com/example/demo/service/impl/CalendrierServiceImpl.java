@@ -47,7 +47,7 @@ public class CalendrierServiceImpl implements CalendrierService {
                 break;
                 
             case AGRICULTEUR:
-                List<Verger> vergers = vergerRepo.findByAgriculteurId(user.getId());
+                List<Verger> vergers = vergerRepo.findByAgriculteurIdAndEstSupprimerFalse(user.getId());
                 // ✅ FIX: Convert to ObjectId
                 List<ObjectId> objectIds = vergers.stream()
                     .map(v -> new ObjectId(v.getId()))
@@ -90,7 +90,7 @@ public class CalendrierServiceImpl implements CalendrierService {
                 System.out.println("User ID: " + user.getId());
                 System.out.println("User Email: " + user.getEmail());
                 
-                List<Verger> vergers = vergerRepo.findByAgriculteurId(user.getId());
+                List<Verger> vergers = vergerRepo.findByAgriculteurIdAndEstSupprimerFalse(user.getId());
                 System.out.println("Number of vergers found: " + vergers.size());
                 
                 for (Verger v : vergers) {

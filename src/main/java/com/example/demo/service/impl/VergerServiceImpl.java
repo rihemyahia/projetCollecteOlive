@@ -4,6 +4,7 @@ import com.example.demo.dto.VergerRequest;
 import com.example.demo.dto.VergerResponse;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.model.Geolocalisation;
+import com.example.demo.model.Role;
 import com.example.demo.model.Utilisateur;
 import com.example.demo.model.Verger;
 import com.example.demo.model.enums.StatutVerger;
@@ -37,11 +38,24 @@ public class VergerServiceImpl implements VergerService {
         Utilisateur agriculteur = getAgriculteurOrThrow(req.getAgriculteurId());
 
         Utilisateur responsable;
-        if (req.getResponsableId() != null && !req.getResponsableId().isBlank()) {
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        if (isAdmin) {
+            if (req.getResponsableId() == null || req.getResponsableId().isBlank()) {
+                throw new IllegalArgumentException("En tant qu'admin, vous devez préciser responsableId");
+            }
+            responsable = getUtilisateurOrThrow(req.getResponsableId());
+        } else if (req.getResponsableId() != null && !req.getResponsableId().isBlank()) {
+            // Allow a responsable to explicitly set responsableId only if needed (kept for compatibility)
             responsable = getUtilisateurOrThrow(req.getResponsableId());
         } else {
             responsable = utilisateurRepo.findByEmail(userDetails.getUsername())
                     .orElseThrow(() -> new ResourceNotFoundException("Responsable introuvable"));
+        }
+
+        if (responsable.getRole() != Role.RESPONSABLE) {
+            throw new IllegalArgumentException("responsableId doit référencer un utilisateur avec le rôle RESPONSABLE");
         }
 
         Verger.VergerBuilder builder = Verger.builder()
@@ -149,6 +163,48 @@ public class VergerServiceImpl implements VergerService {
         if (req.getStatut() != null) v.setStatut(req.getStatut());
 
         // Update geolocation if latitude/longitude are explicitly provided
+        if (req.getLatitude() != null && req.getLongitude() != null) {
+            v.setLocation(new GeoJsonPoint(req.getLongitude(), req.getLatitude()));
+            v.setGeolocalisation(Geolocalisation.builder()
+                    .latitude(req.getLatitude())
+                    .longitude(req.getLongitude())
+                    .adresseIndicative(req.getAdresseIndicative())
+                    .build());
+        }
+
+        return toResponse(vergerRepo.save(v));
+    }
+
+    @Override
+    public VergerResponse mettreAJourAdmin(String id, VergerRequest req) {
+        Verger v = findOrThrow(id);
+
+        // Allow admin to change agriculteur (ownership)
+        if (req.getAgriculteurId() != null && !req.getAgriculteurId().isBlank()) {
+            Utilisateur agriculteur = getAgriculteurOrThrow(req.getAgriculteurId());
+            v.setAgriculteur(agriculteur);
+        }
+
+        // Allow admin to change responsable (manager)
+        if (req.getResponsableId() != null && !req.getResponsableId().isBlank()) {
+            Utilisateur responsable = getUtilisateurOrThrow(req.getResponsableId());
+            if (responsable.getRole() != Role.RESPONSABLE) {
+                throw new IllegalArgumentException("responsableId doit référencer un utilisateur avec le rôle RESPONSABLE");
+            }
+            v.setResponsable(responsable);
+        } else if (req.getResponsableId() != null && req.getResponsableId().isBlank()) {
+            // Explicit blank means "unassign responsable"
+            v.setResponsable(null);
+        }
+
+        // Update normal fields too
+        v.setSuperficie(req.getSuperficie());
+        v.setTypeOlive(req.getTypeOlive());
+        v.setRendementEstime(req.getRendementEstime());
+        v.setMaturiteActuelle(req.getMaturiteActuelle());
+        v.setNbArbre(req.getNbArbre());
+        if (req.getStatut() != null) v.setStatut(req.getStatut());
+
         if (req.getLatitude() != null && req.getLongitude() != null) {
             v.setLocation(new GeoJsonPoint(req.getLongitude(), req.getLatitude()));
             v.setGeolocalisation(Geolocalisation.builder()

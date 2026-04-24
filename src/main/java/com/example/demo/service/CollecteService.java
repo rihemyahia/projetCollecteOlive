@@ -40,4 +40,5 @@ List<Collecte> getByStatut(StatutCollecte statut);
     void demarrerCollecte(String collecteId);
     
     void terminerCollecte(String collecteId);
+	List<Collecte> getCollectesByResponsable(String responsableId);
 }

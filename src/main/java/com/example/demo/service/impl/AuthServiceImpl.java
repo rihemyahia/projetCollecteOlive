@@ -334,7 +334,7 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService {
 
     // ========== PROFIL UTILISATEUR ==========
 
-    public Map<String, Object> getProfil(String id) {
+public Map<String, Object> getProfil(String id) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         Map<String, Object> profil = new HashMap<>();
@@ -349,8 +349,7 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService {
         profil.put("photoProfile", utilisateur.getPhotoProfile());
         return profil;
     }
-
-    public Utilisateur mettreAJourProfil(String id, Map<String, Object> updates) {
+ public Utilisateur mettreAJourProfil(String id, Map<String, Object> updates) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         if (updates.containsKey("nom"))
@@ -366,7 +365,6 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService {
             utilisateur.setPhotoProfile((String) updates.get("photoProfile"));
         return utilisateurRepository.save(utilisateur);
     }
-
     public void changerMotDePasse(String id, String ancienMotDePasse, String nouveauMotDePasse) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
@@ -385,6 +383,22 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService {
         return utilisateurRepository.save(utilisateur);
     }
 
+    /**
+     * Helper: builds login response including photoProfile.
+     */
+    private Map<String, Object> buildAuthResponse(Utilisateur utilisateur, String token) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", utilisateur.getId());
+        response.put("email", utilisateur.getEmail());
+        response.put("prenom", utilisateur.getPrenom());
+        response.put("nom", utilisateur.getNom());
+        response.put("role", utilisateur.getRole());
+        response.put("token", token);
+        response.put("compteActif", utilisateur.isCompteActif());
+        // Include photoProfile so the frontend can display it in the sidebar/navbar immediately after login
+        response.put("photoProfile", utilisateur.getPhotoProfile());
+        return response;
+    }
     public Utilisateur reactiverCompte(String id) {
         Utilisateur utilisateur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));

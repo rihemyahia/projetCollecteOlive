@@ -42,6 +42,9 @@ public class AlerteServiceImpl implements AlerteService {
 
         Verger verger = vergerRepo.findById(req.getVergerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Verger introuvable : " + req.getVergerId()));
+        if (Boolean.TRUE.equals(verger.getEstSupprimer())) {
+            throw new ResourceNotFoundException("Verger introuvable (supprimé) : " + req.getVergerId());
+        }
 
         // Derive phase from verger's current maturity — no date needed
         PhaseCulturale phase = derivePhase(verger);
@@ -251,6 +254,9 @@ public class AlerteServiceImpl implements AlerteService {
     public void verifyResponsableOwnsVerger(String vergerId, UserDetails userDetails) {
         Verger verger = vergerRepo.findById(vergerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Verger not found"));
+        if (Boolean.TRUE.equals(verger.getEstSupprimer())) {
+            throw new ResourceNotFoundException("Verger not found (deleted)");
+        }
         
         Utilisateur responsable = utilisateurRepo.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Responsable not found"));

@@ -30,6 +30,27 @@ public class UserProfileController {
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
         return ResponseEntity.ok(authServiceImpl.getProfil(utilisateur.getId()));
     }
+    @PutMapping("/photo")
+    public ResponseEntity<Map<String, Object>> updatePhoto(
+            Authentication authentication,
+            @RequestBody Map<String, Object> body) {
+        String email = authentication.getName();
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
+
+        String photoBase64 = (String) body.get("photoProfile");
+        if (photoBase64 == null || photoBase64.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Photo manquante"));
+        }
+
+        utilisateur.setPhotoProfile(photoBase64);
+        utilisateurRepository.save(utilisateur);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Photo de profil mise à jour avec succès");
+        response.put("photoProfile", utilisateur.getPhotoProfile());
+        return ResponseEntity.ok(response);
+    }
 
     @PutMapping
     public ResponseEntity<Map<String, Object>> mettreAJourProfil(

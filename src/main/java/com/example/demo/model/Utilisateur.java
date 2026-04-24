@@ -59,6 +59,7 @@ public class Utilisateur {
     private Date dateEmbauche;
     private Double salaire;
     private TypeTravailleur statutEmploye;
+    private String photoProfile;
 
     // ========== ATTRIBUTS POUR ROLE: TRANSPORTEUR ==========
     private String permis;

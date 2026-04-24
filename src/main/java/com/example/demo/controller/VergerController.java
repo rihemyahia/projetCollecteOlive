@@ -155,12 +155,29 @@ public class VergerController {
             @Valid @RequestBody VergerRequest req,
             @AuthenticationPrincipal UserDetails userDetails) {
 
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         boolean isAgriculteur = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_AGRICULTEUR"));
         if (isAgriculteur) {
             vergerService.verifierProprietaireVerger(id, userDetails);
         }
+        // Only ADMIN can change responsable/agriculteur relationship fields.
+        if (!isAdmin) {
+            req.setResponsableId(null);
+        }
         return ResponseEntity.ok(vergerService.mettreAJour(id, req));
+    }
+
+    /**
+     * Admin-only update: can change responsableId and agriculteurId (ownership/management).
+     */
+    @PutMapping("/{id}/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<VergerResponse> mettreAJourAdmin(
+            @PathVariable String id,
+            @Valid @RequestBody VergerRequest req) {
+        return ResponseEntity.ok(vergerService.mettreAJourAdmin(id, req));
     }
 
     @PatchMapping("/{id}/statut")

@@ -121,4 +121,5 @@ public interface CollecteRepository extends MongoRepository<Collecte, String> {
      * Delete all collectes with status PLANIFIEE for a verger
      */
     void deleteByVergerIdAndStatut(String vergerId, StatutCollecte statut);
+	List<Collecte> findByVergerIdIn(List<String> vergerIds);
 }
