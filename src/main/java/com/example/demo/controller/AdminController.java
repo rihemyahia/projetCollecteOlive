@@ -20,14 +20,11 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RestController
@@ -219,11 +216,8 @@ public class AdminController {
     // ========== ADMIN : AGRICULTEURS ==========
 
     /**
-     * Update agriculteur fields and optionally reassign which vergers they own.
-     *
-     * If ownedVergerIds is provided:
-     * - Assigns those vergers to this agriculteur.
-     * - If replaceOwnedVergers=true, unassigns any other vergers currently owned by this agriculteur.
+     * Update agriculteur fields only.
+     * Verger assignment/unassignment is intentionally not handled here.
      */
     @PatchMapping("/agriculteurs/{id}")
     public ResponseEntity<Utilisateur> adminUpdateAgriculteur(
@@ -240,35 +234,6 @@ public class AdminController {
         if (req.getNomExploitation() != null) agriculteur.setNomExploitation(req.getNomExploitation());
 
         Utilisateur savedAgriculteur = utilisateurRepository.save(agriculteur);
-
-        if (req.getOwnedVergerIds() != null) {
-            List<String> targetIds = req.getOwnedVergerIds().stream()
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(s -> !s.isBlank())
-                    .distinct()
-                    .collect(Collectors.toList());
-
-            List<com.example.demo.model.Verger> toAssign = new ArrayList<>(vergerRepository.findAllById(targetIds));
-            toAssign = toAssign.stream()
-                    .filter(v -> Boolean.FALSE.equals(v.getEstSupprimer()))
-                    .collect(Collectors.toList());
-            toAssign.forEach(v -> v.setAgriculteur(savedAgriculteur));
-            vergerRepository.saveAll(toAssign);
-
-            boolean replace = Boolean.TRUE.equals(req.getReplaceOwnedVergers());
-            if (replace) {
-                List<com.example.demo.model.Verger> currentlyOwned =
-                        vergerRepository.findByAgriculteurIdAndEstSupprimerFalse(savedAgriculteur.getId());
-
-                List<com.example.demo.model.Verger> toUnassign = currentlyOwned.stream()
-                        .filter(v -> v.getId() != null && !targetIds.contains(v.getId()))
-                        .collect(Collectors.toList());
-
-                toUnassign.forEach(v -> v.setAgriculteur(null));
-                vergerRepository.saveAll(toUnassign);
-            }
-        }
 
         return ResponseEntity.ok(savedAgriculteur);
     }
