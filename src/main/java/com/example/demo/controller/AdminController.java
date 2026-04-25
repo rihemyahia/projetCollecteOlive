@@ -192,11 +192,8 @@ public class AdminController {
     // ========== ADMIN : RESPONSABLES ==========
 
     /**
-     * Update responsable fields and optionally reassign which vergers they manage.
-     *
-     * If managedVergerIds is provided:
-     * - Assigns those vergers to this responsable.
-     * - If replaceManagedVergers=true, unassigns any other vergers currently managed by this responsable.
+     * Update responsable fields only.
+     * Verger assignment/unassignment is intentionally not handled here.
      */
     @PatchMapping("/responsables/{id}")
     public ResponseEntity<Utilisateur> adminUpdateResponsable(
@@ -215,37 +212,6 @@ public class AdminController {
         if (req.getDatePrisePoste() != null) responsable.setDatePrisePoste(req.getDatePrisePoste());
 
         Utilisateur savedResponsable = utilisateurRepository.save(responsable);
-
-        if (req.getManagedVergerIds() != null) {
-            List<String> targetIds = req.getManagedVergerIds().stream()
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(s -> !s.isBlank())
-                    .distinct()
-                    .collect(Collectors.toList());
-
-            // Assign listed vergers to this responsable
-            List<com.example.demo.model.Verger> toAssign = new ArrayList<>(vergerRepository.findAllById(targetIds));
-            toAssign = toAssign.stream()
-                    .filter(v -> Boolean.FALSE.equals(v.getEstSupprimer()))
-                    .collect(Collectors.toList());
-            toAssign.forEach(v -> v.setResponsable(savedResponsable));
-            vergerRepository.saveAll(toAssign);
-
-            boolean replace = Boolean.TRUE.equals(req.getReplaceManagedVergers());
-            if (replace) {
-                // Unassign any verger currently managed by this responsable but not in the new list
-                List<com.example.demo.model.Verger> currentlyManaged =
-                        vergerRepository.findByResponsableIdAndEstSupprimerFalse(savedResponsable.getId());
-
-                List<com.example.demo.model.Verger> toUnassign = currentlyManaged.stream()
-                        .filter(v -> v.getId() != null && !targetIds.contains(v.getId()))
-                        .collect(Collectors.toList());
-
-                toUnassign.forEach(v -> v.setResponsable(null));
-                vergerRepository.saveAll(toUnassign);
-            }
-        }
 
         return ResponseEntity.ok(savedResponsable);
     }

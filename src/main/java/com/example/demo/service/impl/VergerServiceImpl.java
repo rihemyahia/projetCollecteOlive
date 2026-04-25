@@ -192,9 +192,6 @@ public class VergerServiceImpl implements VergerService {
                 throw new IllegalArgumentException("responsableId doit référencer un utilisateur avec le rôle RESPONSABLE");
             }
             v.setResponsable(responsable);
-        } else if (req.getResponsableId() != null && req.getResponsableId().isBlank()) {
-            // Explicit blank means "unassign responsable"
-            v.setResponsable(null);
         }
 
         // Update normal fields too
