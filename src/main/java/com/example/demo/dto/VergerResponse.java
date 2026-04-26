@@ -23,6 +23,11 @@ public class VergerResponse {
     private Double rendementEstime;
     private Integer maturiteActuelle;
     private StatutVerger statut;
+    private String statutSource;
+    private StatutVerger statutOverride;
+    private String statutOverrideReason;
+    private String statutOverrideByUserId;
+    private Date statutOverrideAt;
     private Date dateDerniereRecolte;
     private Boolean estSupprimer;
     private Date dateCreation;

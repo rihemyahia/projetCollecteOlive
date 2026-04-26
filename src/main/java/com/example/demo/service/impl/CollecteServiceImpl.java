@@ -12,6 +12,7 @@ import com.example.demo.repository.CollecteRepository;
 import com.example.demo.repository.TourneeRepository;
 import com.example.demo.repository.VergerRepository;
 import com.example.demo.service.CollecteService;
+import com.example.demo.service.VergerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ public class CollecteServiceImpl implements CollecteService {
     private final CollecteRepository collecteRepo;
     private final TourneeRepository tourneeRepo;
     private final VergerRepository vergerRepo;
+    private final VergerService vergerService;
 
     @Override
     public Collecte getById(String id) {
@@ -234,6 +236,9 @@ public class CollecteServiceImpl implements CollecteService {
         }
 
         Collecte saved = collecteRepo.save(collecte);
+        if (saved.getVergerId() != null) {
+            vergerService.recomputeStatutForVerger(saved.getVergerId());
+        }
         System.out.println("Collecte APRÈS mise à jour:");
         System.out.println("  nbreTournees: " + saved.getNbreTournees());
         System.out.println("  quantiteTotaleKg: " + saved.getQuantiteTotaleKg());
@@ -274,6 +279,9 @@ public class CollecteServiceImpl implements CollecteService {
         collecte.setStatut(StatutCollecte.EN_COURS);
         collecte.setDateDebutCampagne(new Date());
         collecteRepo.save(collecte);
+        if (collecte.getVergerId() != null) {
+            vergerService.recomputeStatutForVerger(collecte.getVergerId());
+        }
     }
 
     @Override
@@ -286,5 +294,8 @@ public class CollecteServiceImpl implements CollecteService {
         collecte.setDateFinCampagne(new Date());
         collecte.setEstCloturee(true);
         collecteRepo.save(collecte);
+        if (collecte.getVergerId() != null) {
+            vergerService.recomputeStatutForVerger(collecte.getVergerId());
+        }
     }
 }

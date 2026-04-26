@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.VergerStatutOverrideRequest;
 import com.example.demo.dto.VergerRequest;
 import com.example.demo.dto.VergerResponse;
 import com.example.demo.model.enums.StatutVerger;
@@ -166,6 +167,11 @@ public class VergerController {
         if (!isAdmin) {
             req.setResponsableId(null);
         }
+        // AGRICULTEUR cannot manually override status.
+        if (isAgriculteur) {
+            req.setStatut(null);
+            req.setStatutOverrideReason(null);
+        }
         return ResponseEntity.ok(vergerService.mettreAJour(id, req));
     }
 
@@ -184,7 +190,7 @@ public class VergerController {
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'AGRICULTEUR','ADMIN')")
     public ResponseEntity<VergerResponse> changerStatut(
             @PathVariable String id,
-            @RequestParam StatutVerger statut,
+            @RequestBody VergerStatutOverrideRequest req,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         boolean isAgriculteur = userDetails.getAuthorities().stream()
@@ -192,7 +198,16 @@ public class VergerController {
         if (isAgriculteur) {
             vergerService.verifierProprietaireVerger(id, userDetails);
         }
-        return ResponseEntity.ok(vergerService.changerStatut(id, statut));
+        if (Boolean.TRUE.equals(req.getClearOverride())) {
+            return ResponseEntity.ok(vergerService.clearStatutOverride(id));
+        }
+        if (req.getStatut() == null) {
+            throw new IllegalArgumentException("Le statut est obligatoire");
+        }
+        if (req.getReason() == null || req.getReason().isBlank()) {
+            throw new IllegalArgumentException("La raison du changement manuel est obligatoire");
+        }
+        return ResponseEntity.ok(vergerService.changerStatut(id, req.getStatut(), req.getReason().trim(), userDetails.getUsername()));
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────

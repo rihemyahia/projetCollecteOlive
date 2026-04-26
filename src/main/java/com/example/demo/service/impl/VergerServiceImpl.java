@@ -3,11 +3,17 @@ package com.example.demo.service.impl;
 import com.example.demo.dto.VergerRequest;
 import com.example.demo.dto.VergerResponse;
 import com.example.demo.exception.ResourceNotFoundException;
+import com.example.demo.model.Collecte;
 import com.example.demo.model.Geolocalisation;
 import com.example.demo.model.Role;
+import com.example.demo.model.StatutTournee;
+import com.example.demo.model.Tournee;
 import com.example.demo.model.Utilisateur;
 import com.example.demo.model.Verger;
+import com.example.demo.model.enums.StatutCollecte;
 import com.example.demo.model.enums.StatutVerger;
+import com.example.demo.repository.CollecteRepository;
+import com.example.demo.repository.TourneeRepository;
 import com.example.demo.repository.UtilisateurRepository;
 import com.example.demo.repository.VergerRepository;
 import com.example.demo.service.VergerService;
@@ -21,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,6 +37,8 @@ public class VergerServiceImpl implements VergerService {
 
     private final VergerRepository      vergerRepo;
     private final UtilisateurRepository utilisateurRepo;
+    private final CollecteRepository collecteRepo;
+    private final TourneeRepository tourneeRepo;
 
     // ── CREATE ────────────────────────────────────────────────────────────────
 
@@ -66,7 +75,7 @@ public class VergerServiceImpl implements VergerService {
                 .rendementEstime(req.getRendementEstime())
                 .maturiteActuelle(req.getMaturiteActuelle())
                 .nbArbre(req.getNbArbre())
-                .statut(req.getStatut() != null ? req.getStatut() : StatutVerger.NON_RECOLTE)
+                .statut(StatutVerger.NON_RECOLTE)
                 .estSupprimer(false)
                 .dateCreation(new Date());
 
@@ -81,7 +90,8 @@ public class VergerServiceImpl implements VergerService {
                     .build());
         }
 
-        return toResponse(vergerRepo.save(builder.build()));
+        Verger saved = vergerRepo.save(builder.build());
+        return recomputeStatutForVerger(saved.getId());
     }
 
     // ── READ ──────────────────────────────────────────────────────────────────
@@ -120,8 +130,8 @@ public class VergerServiceImpl implements VergerService {
 
     @Override
     public List<VergerResponse> getByStatut(StatutVerger statut) {
-        return vergerRepo.findByStatut(statut).stream()
-                .filter(v -> Boolean.FALSE.equals(v.getEstSupprimer()))
+        return vergerRepo.findByEstSupprimerFalse().stream()
+                .filter(v -> getEffectiveStatut(v) == statut)
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
@@ -160,7 +170,6 @@ public class VergerServiceImpl implements VergerService {
         v.setRendementEstime(req.getRendementEstime());
         v.setMaturiteActuelle(req.getMaturiteActuelle());
         v.setNbArbre(req.getNbArbre());
-        if (req.getStatut() != null) v.setStatut(req.getStatut());
 
         // Update geolocation if latitude/longitude are explicitly provided
         if (req.getLatitude() != null && req.getLongitude() != null) {
@@ -172,7 +181,9 @@ public class VergerServiceImpl implements VergerService {
                     .build());
         }
 
-        return toResponse(vergerRepo.save(v));
+        applyManualOverrideIfRequested(v, req, null);
+        vergerRepo.save(v);
+        return recomputeStatutForVerger(v.getId());
     }
 
     @Override
@@ -200,7 +211,6 @@ public class VergerServiceImpl implements VergerService {
         v.setRendementEstime(req.getRendementEstime());
         v.setMaturiteActuelle(req.getMaturiteActuelle());
         v.setNbArbre(req.getNbArbre());
-        if (req.getStatut() != null) v.setStatut(req.getStatut());
 
         if (req.getLatitude() != null && req.getLongitude() != null) {
             v.setLocation(new GeoJsonPoint(req.getLongitude(), req.getLatitude()));
@@ -211,7 +221,9 @@ public class VergerServiceImpl implements VergerService {
                     .build());
         }
 
-        return toResponse(vergerRepo.save(v));
+        applyManualOverrideIfRequested(v, req, null);
+        vergerRepo.save(v);
+        return recomputeStatutForVerger(v.getId());
     }
 
     @Override
@@ -234,13 +246,41 @@ public class VergerServiceImpl implements VergerService {
     }
 
     @Override
-    public VergerResponse changerStatut(String id, StatutVerger statut) {
+    public VergerResponse changerStatut(String id, StatutVerger statut, String reason, String updatedByUserId) {
         Verger v = findOrThrow(id);
-        v.setStatut(statut);
+        v.setStatutOverride(statut);
+        v.setStatutOverrideReason(reason);
+        v.setStatutOverrideByUserId(updatedByUserId);
+        v.setStatutOverrideAt(new Date());
         if (statut == StatutVerger.RECOLTE) {
             v.setDateDerniereRecolte(new Date());
         }
         return toResponse(vergerRepo.save(v));
+    }
+
+    @Override
+    public VergerResponse clearStatutOverride(String id) {
+        Verger v = findOrThrow(id);
+        v.setStatutOverride(null);
+        v.setStatutOverrideReason(null);
+        v.setStatutOverrideByUserId(null);
+        v.setStatutOverrideAt(null);
+        vergerRepo.save(v);
+        return recomputeStatutForVerger(v.getId());
+    }
+
+    @Override
+    public VergerResponse recomputeStatutForVerger(String id) {
+        Verger verger = findOrThrow(id);
+        StatutVerger computed = computeStatut(verger.getId());
+        verger.setStatut(computed);
+        if (computed == StatutVerger.RECOLTE && verger.getDateDerniereRecolte() == null) {
+            verger.setDateDerniereRecolte(new Date());
+        }
+        if (computed != StatutVerger.RECOLTE) {
+            verger.setDateDerniereRecolte(null);
+        }
+        return toResponse(vergerRepo.save(verger));
     }
 
     @Override
@@ -302,6 +342,8 @@ public class VergerServiceImpl implements VergerService {
     private VergerResponse toResponse(Verger v) {
         Utilisateur ag = v.getAgriculteur();
         Utilisateur resp = v.getResponsable();
+        StatutVerger effectiveStatut = getEffectiveStatut(v);
+        String statutSource = v.getStatutOverride() != null ? "OVERRIDE" : "COMPUTED";
         return VergerResponse.builder()
                 .id(v.getId())
                 .agriculteurId(ag.getId())
@@ -316,11 +358,81 @@ public class VergerServiceImpl implements VergerService {
                 .rendementEstime(v.getRendementEstime())
                 .maturiteActuelle(v.getMaturiteActuelle())
                 .nbArbre(v.getNbArbre())
-                .statut(v.getStatut())
+                .statut(effectiveStatut)
+                .statutSource(statutSource)
+                .statutOverride(v.getStatutOverride())
+                .statutOverrideReason(v.getStatutOverrideReason())
+                .statutOverrideByUserId(v.getStatutOverrideByUserId())
+                .statutOverrideAt(v.getStatutOverrideAt())
                 .dateDerniereRecolte(v.getDateDerniereRecolte())
                 .estSupprimer(v.getEstSupprimer())
                 .dateCreation(v.getDateCreation())
                 .geolocalisation(v.getGeolocalisation())   // ← new field
                 .build();
+    }
+
+    private StatutVerger getEffectiveStatut(Verger verger) {
+        if (verger.getStatutOverride() != null) {
+            return verger.getStatutOverride();
+        }
+        return computeStatut(verger.getId());
+    }
+
+    private StatutVerger computeStatut(String vergerId) {
+        String currentCampaign = getCampagneAnnee(new Date());
+
+        Optional<Collecte> collecteOpt = collecteRepo.findByVergerIdAndAnnee(vergerId, currentCampaign);
+        if (collecteOpt.isPresent()) {
+            Collecte collecte = collecteOpt.get();
+            if (collecte.getStatut() == StatutCollecte.TERMINEE || Boolean.TRUE.equals(collecte.getEstCloturee())) {
+                return StatutVerger.RECOLTE;
+            }
+            if (collecte.getStatut() == StatutCollecte.EN_COURS) {
+                return StatutVerger.EN_COURS;
+            }
+        }
+
+        List<Tournee> campagneTournees = tourneeRepo.findByVergerId(vergerId).stream()
+                .filter(t -> t.getDateDebut() != null && currentCampaign.equals(getCampagneAnnee(t.getDateDebut())))
+                .collect(Collectors.toList());
+
+        boolean hasInProgress = campagneTournees.stream()
+                .anyMatch(t -> t.getStatut() == StatutTournee.EN_COURS);
+        if (hasInProgress) {
+            return StatutVerger.EN_COURS;
+        }
+
+        boolean hasTerminee = campagneTournees.stream()
+                .anyMatch(t -> t.getStatut() == StatutTournee.TERMINEE);
+        if (hasTerminee) {
+            return StatutVerger.EN_COURS;
+        }
+
+        return StatutVerger.NON_RECOLTE;
+    }
+
+    private String getCampagneAnnee(Date date) {
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTime(date);
+        int year = cal.get(java.util.Calendar.YEAR);
+        int month = cal.get(java.util.Calendar.MONTH);
+        if (month >= java.util.Calendar.AUGUST) {
+            return year + "-" + (year + 1);
+        }
+        return (year - 1) + "-" + year;
+    }
+
+    private void applyManualOverrideIfRequested(Verger verger, VergerRequest req, String updatedByUserId) {
+        if (req.getStatut() == null) return;
+        if (req.getStatutOverrideReason() == null || req.getStatutOverrideReason().isBlank()) {
+            throw new IllegalArgumentException("La raison du changement manuel de statut est obligatoire");
+        }
+        verger.setStatutOverride(req.getStatut());
+        verger.setStatutOverrideReason(req.getStatutOverrideReason().trim());
+        verger.setStatutOverrideByUserId(updatedByUserId);
+        verger.setStatutOverrideAt(new Date());
+        if (req.getStatut() == StatutVerger.RECOLTE) {
+            verger.setDateDerniereRecolte(new Date());
+        }
     }
 }
