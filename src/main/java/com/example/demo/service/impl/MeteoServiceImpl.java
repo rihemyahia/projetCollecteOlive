@@ -4,6 +4,7 @@ import com.example.demo.service.MeteoService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.time.Year;
 import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -53,72 +54,74 @@ public class MeteoServiceImpl implements MeteoService {
     }
 
     @Override
-public double getPrecipitationHistorique(double latitude, double longitude, String annee) {
-    // 🔥 FORMATAGE STRICT avec Locale.US pour éviter les virgules
-    String latFormatted = String.format(Locale.US, "%.6f", latitude);
-    String lonFormatted = String.format(Locale.US, "%.6f", longitude);
-    
-    String dateDebut = annee + "-01-01";
-    String dateFin = annee + "-12-31";
-    
-    String url = String.format(
-        "https://archive-api.open-meteo.com/v1/archive?latitude=%s&longitude=%s&start_date=%s&end_date=%s&daily=precipitation_sum",
-        latFormatted, lonFormatted, dateDebut, dateFin
-    );
-    
-    System.out.println("🌍 Coordonnées formatées: lat=" + latFormatted + ", lon=" + lonFormatted);
-    System.out.println("🔗 Open-Meteo URL: " + url);
-    
-    try {
-        String jsonResponse = restTemplate.getForObject(url, String.class);
-        JsonNode root = objectMapper.readTree(jsonResponse);
+    public double getPrecipitationHistorique(double latitude, double longitude, String annee) {
+        // 🔥 CORRECTION : Utiliser l'année précédente si l'année demandée n'est pas terminée
+        String anneeUtilisee = getAnneeComplete(annee);
         
-        // Vérifie si l'API retourne une erreur
-        if (root.has("reason")) {
-            throw new RuntimeException("API Error: " + root.path("reason").asText());
-        }
-        
-        JsonNode precipitations = root.path("daily").path("precipitation_sum");
-        
-        if (precipitations.isMissingNode() || precipitations.size() == 0) {
-            throw new RuntimeException("Aucune donnée de précipitations pour " + annee);
-        }
-        
-        double totalAnnuel = 0;
-        for (JsonNode jour : precipitations) {
-            totalAnnuel += jour.asDouble();
-        }
-        
-        System.out.println("🌧️ Précipitations annuelles " + annee + ": " + totalAnnuel + " mm");
-        return totalAnnuel;
-        
-    } catch (Exception e) {
-        throw new RuntimeException("❌ Erreur Open-Meteo précipitations: " + e.getMessage());
-    }
-}
-    
-    @Override
-    public double getTemperatureMoyenneAnnuelle(double latitude, double longitude, String annee) {
-        // 🔥 FORMATAGE STRICT avec Locale.US pour éviter les virgules
         String latFormatted = String.format(Locale.US, "%.6f", latitude);
         String lonFormatted = String.format(Locale.US, "%.6f", longitude);
         
-        String dateDebut = annee + "-01-01";
-        String dateFin = annee + "-12-31";
+        String dateDebut = anneeUtilisee + "-01-01";
+        String dateFin = anneeUtilisee + "-12-31";
+        
+        String url = String.format(
+            "https://archive-api.open-meteo.com/v1/archive?latitude=%s&longitude=%s&start_date=%s&end_date=%s&daily=precipitation_sum",
+            latFormatted, lonFormatted, dateDebut, dateFin
+        );
+        
+        System.out.println("🌍 Année utilisée: " + anneeUtilisee);
+        System.out.println("🔗 Open-Meteo URL: " + url);
+        
+        try {
+            String jsonResponse = restTemplate.getForObject(url, String.class);
+            JsonNode root = objectMapper.readTree(jsonResponse);
+            
+            if (root.has("reason")) {
+                throw new RuntimeException("API Error: " + root.path("reason").asText());
+            }
+            
+            JsonNode precipitations = root.path("daily").path("precipitation_sum");
+            
+            if (precipitations.isMissingNode() || precipitations.size() == 0) {
+                throw new RuntimeException("Aucune donnée de précipitations pour " + anneeUtilisee);
+            }
+            
+            double totalAnnuel = 0;
+            for (JsonNode jour : precipitations) {
+                totalAnnuel += jour.asDouble();
+            }
+            
+            System.out.println("🌧️ Précipitations annuelles " + anneeUtilisee + ": " + totalAnnuel + " mm");
+            return totalAnnuel;
+            
+        } catch (Exception e) {
+            throw new RuntimeException("❌ Erreur Open-Meteo précipitations: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public double getTemperatureMoyenneAnnuelle(double latitude, double longitude, String annee) {
+        // 🔥 CORRECTION : Utiliser l'année précédente si l'année demandée n'est pas terminée
+        String anneeUtilisee = getAnneeComplete(annee);
+        
+        String latFormatted = String.format(Locale.US, "%.6f", latitude);
+        String lonFormatted = String.format(Locale.US, "%.6f", longitude);
+        
+        String dateDebut = anneeUtilisee + "-01-01";
+        String dateFin = anneeUtilisee + "-12-31";
         
         String url = String.format(
             "https://archive-api.open-meteo.com/v1/archive?latitude=%s&longitude=%s&start_date=%s&end_date=%s&daily=temperature_2m_mean",
             latFormatted, lonFormatted, dateDebut, dateFin
         );
         
-        System.out.println("🌍 Coordonnées formatées: lat=" + latFormatted + ", lon=" + lonFormatted);
-        System.out.println("🔗 Open-Meteo (température moyenne): " + url);
+        System.out.println("🌍 Année utilisée: " + anneeUtilisee);
+        System.out.println("🔗 Open-Meteo URL: " + url);
         
         try {
             String jsonResponse = restTemplate.getForObject(url, String.class);
             JsonNode root = objectMapper.readTree(jsonResponse);
             
-            // Vérifie si l'API retourne une erreur
             if (root.has("reason")) {
                 throw new RuntimeException("API Error: " + root.path("reason").asText());
             }
@@ -126,7 +129,7 @@ public double getPrecipitationHistorique(double latitude, double longitude, Stri
             JsonNode temperatures = root.path("daily").path("temperature_2m_mean");
             
             if (temperatures.isMissingNode() || temperatures.size() == 0) {
-                throw new RuntimeException("Aucune donnée de température pour " + annee);
+                throw new RuntimeException("Aucune donnée de température pour " + anneeUtilisee);
             }
             
             double totalTemp = 0;
@@ -137,13 +140,31 @@ public double getPrecipitationHistorique(double latitude, double longitude, Stri
             }
             
             double moyenneAnnuelle = totalTemp / jours;
-            System.out.println("🌡️ Température moyenne annuelle " + annee + ": " + String.format(Locale.US, "%.2f", moyenneAnnuelle) + "°C");
+            System.out.println("🌡️ Température moyenne annuelle " + anneeUtilisee + ": " + String.format(Locale.US, "%.2f", moyenneAnnuelle) + "°C");
             return moyenneAnnuelle;
             
         } catch (Exception e) {
             throw new RuntimeException("❌ Erreur Open-Meteo température: " + e.getMessage());
         }
     }
+    
+    /**
+     * 🔥 Méthode utilitaire : Retourne une année complète (terminée)
+     * Si l'année demandée est l'année en cours, retourne l'année précédente
+     */
+    private String getAnneeComplete(String anneeDemandee) {
+        int anneeInt = Integer.parseInt(anneeDemandee);
+        int anneeActuelle = Year.now().getValue();
+        
+        if (anneeInt == anneeActuelle) {
+            String anneePrecedente = String.valueOf(anneeActuelle - 1);
+            System.out.println("⚠️ Année " + anneeDemandee + " non terminée, utilisation de " + anneePrecedente);
+            return anneePrecedente;
+        }
+        
+        return anneeDemandee;
+    }
+
     @Override
     public double getTemperature(double latitude, double longitude) {
         String url = String.format("%s?lat=%f&lon=%f&appid=%s&units=metric", 
