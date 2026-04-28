@@ -47,7 +47,7 @@ private final MeteoService meteoService;  // ← À ajouter
     @Override
     public List<Collecte> getCollectesByResponsable(String responsableId) {
         // Récupérer tous les vergers assignés à ce responsable
-        List<Verger> vergersResponsable = vergerRepo.findByResponsableId(responsableId);
+        List<Verger> vergersResponsable = vergerRepo.findByResponsableIdAndEstSupprimerFalse(responsableId);
         
         if (vergersResponsable.isEmpty()) {
             return new ArrayList<>();
@@ -136,6 +136,9 @@ private final MeteoService meteoService;  // ← À ajouter
         Verger verger = null;
         if (collecte.getVergerId() != null) {
             verger = vergerRepo.findById(collecte.getVergerId()).orElse(null);
+            if (verger != null && Boolean.TRUE.equals(verger.getEstSupprimer())) {
+                verger = null;
+            }
         } else if (!tournees.isEmpty()) {
             verger = tournees.get(0).getVerger();
         }
@@ -251,7 +254,7 @@ public Collecte createNewCollecte(Verger verger, String annee, Date dateDebut) {
         // ✅ Vérifier si le verger est entièrement récolté pour clôturer la collecte
         if (collecte.getVergerId() != null) {
             Verger verger = vergerRepo.findById(collecte.getVergerId()).orElse(null);
-            if (verger != null && totalArbresRecoltes >= verger.getNbArbre()) {
+            if (verger != null && Boolean.FALSE.equals(verger.getEstSupprimer()) && totalArbresRecoltes >= verger.getNbArbre()) {
                 collecte.setEstCloturee(true);
                 collecte.setDateFinCampagne(new Date());
                 collecte.setStatut(StatutCollecte.TERMINEE);
@@ -261,6 +264,9 @@ public Collecte createNewCollecte(Verger verger, String annee, Date dateDebut) {
         }
 
         Collecte saved = collecteRepo.save(collecte);
+        if (saved.getVergerId() != null) {
+            vergerService.recomputeStatutForVerger(saved.getVergerId());
+        }
         System.out.println("Collecte APRÈS mise à jour:");
         System.out.println("  nbreTournees: " + saved.getNbreTournees());
         System.out.println("  quantiteTotaleKg: " + saved.getQuantiteTotaleKg());
@@ -301,6 +307,9 @@ public Collecte createNewCollecte(Verger verger, String annee, Date dateDebut) {
         collecte.setStatut(StatutCollecte.EN_COURS);
         collecte.setDateDebutCampagne(new Date());
         collecteRepo.save(collecte);
+        if (collecte.getVergerId() != null) {
+            vergerService.recomputeStatutForVerger(collecte.getVergerId());
+        }
     }
 
     @Override
@@ -313,5 +322,8 @@ public Collecte createNewCollecte(Verger verger, String annee, Date dateDebut) {
         collecte.setDateFinCampagne(new Date());
         collecte.setEstCloturee(true);
         collecteRepo.save(collecte);
+        if (collecte.getVergerId() != null) {
+            vergerService.recomputeStatutForVerger(collecte.getVergerId());
+        }
     }
 }

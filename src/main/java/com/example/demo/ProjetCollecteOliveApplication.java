@@ -56,9 +56,9 @@ public class ProjetCollecteOliveApplication {
             }
 
             // ===== CREATE RESPONSABLE USER =====
-            if (utilisateurRepository.findByEmail("responsable@cooperative.com").isEmpty()) {
+            if (utilisateurRepository.findByEmail("responsable1@cooperative.com").isEmpty()) {
                 Utilisateur responsable = new Utilisateur();
-                responsable.setEmail("responsable@cooperative.com");
+                responsable.setEmail("responsable1@cooperative.com");
                 responsable.setPrenom("Faiza");  // Keeping your specific name
                 responsable.setNom("Ghozzi");    // Keeping your specific name
                 responsable.setTelephone("+216 98 765 432");

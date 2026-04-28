@@ -15,6 +15,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 import com.example.demo.repository.UtilisateurRepository;
 import java.util.List;
 
@@ -38,6 +40,17 @@ public class AlerteController {
         }
         return ResponseEntity.ok(alerteService.signalerProbleme(req));
     }
+
+    @PostMapping(path = "/{id}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('AGRICULTEUR')")
+    public ResponseEntity<AlerteResponse> ajouterPhotos(
+            @PathVariable String id,
+    @RequestPart(name = "files", required = false)
+    MultipartFile[] files,            
+    @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        return ResponseEntity.ok(alerteService.ajouterPhotos(id, files, userDetails));
+    }
     // Helper method
 
     @GetMapping
@@ -46,11 +59,11 @@ public class AlerteController {
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        
+
         if (isAdmin) {
             return ResponseEntity.ok(alerteService.getAll());  // ADMIN sees all alerts
         }
-        
+
         // RESPONSABLE sees only alerts from vergers they manage
         return ResponseEntity.ok(alerteService.getByResponsable(userDetails));
     }
@@ -62,7 +75,7 @@ public class AlerteController {
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        
+
         if (isAdmin) {
             return ResponseEntity.ok(alerteService.getByStatut(statut));
         }
@@ -77,7 +90,7 @@ public class AlerteController {
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        
+
         if (isAdmin) {
             return ResponseEntity.ok(alerteService.getByUrgence(urgence));
         }
@@ -93,7 +106,7 @@ public class AlerteController {
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        
+
         if (isAdmin) {
             return ResponseEntity.ok(alerteService.getNearbyAlerts(longitude, latitude));
         }
@@ -107,7 +120,7 @@ public class AlerteController {
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        
+
         if (!isAdmin) {
             // Verify responsable owns this verger
             alerteService.verifyResponsableOwnsVerger(vergerId, userDetails);
@@ -158,6 +171,21 @@ public class AlerteController {
             @PathVariable String id,
             @RequestParam StatutAlerte statut) {
         return ResponseEntity.ok(alerteService.changerStatut(id, statut));
+    }
+
+    @PatchMapping("/{id}/urgence")
+    @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
+    public ResponseEntity<AlerteResponse> changerUrgence(
+            @PathVariable String id,
+            @RequestParam NiveauUrgence urgence,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        if (isAdmin) {
+            return ResponseEntity.ok(alerteService.changerUrgenceForResponsable(id, urgence, userDetails));
+        }
+        return ResponseEntity.ok(alerteService.changerUrgenceForResponsable(id, urgence, userDetails));
     }
 
     @PatchMapping("/{id}/traiter")
@@ -242,6 +270,20 @@ public class AlerteController {
             @RequestParam StatutAlerte statut,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(alerteService.changerStatutForResponsable(id, statut, userDetails));
+    }
+
+    /**
+     * PATCH /api/alertes/responsable/{id}/urgence?urgence=CRITIQUE
+     * Responsable changes alert urgency level (only from their vergers)
+     * Returns 403 if they don't own the alert's verger
+     */
+    @PatchMapping("/responsable/{id}/urgence")
+    @PreAuthorize("hasRole('RESPONSABLE')")
+    public ResponseEntity<AlerteResponse> changerUrgenceResponsable(
+            @PathVariable String id,
+            @RequestParam NiveauUrgence urgence,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(alerteService.changerUrgenceForResponsable(id, urgence, userDetails));
     }
 
     /**

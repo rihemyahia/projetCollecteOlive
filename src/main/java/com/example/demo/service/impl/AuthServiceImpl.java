@@ -125,6 +125,7 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
         response.put("role", utilisateur.getRole());
         response.put("token", token);
         response.put("compteActif", utilisateur.isCompteActif());
+        response.put("photoProfile", utilisateur.getPhotoProfile());
 
         return response;
     }

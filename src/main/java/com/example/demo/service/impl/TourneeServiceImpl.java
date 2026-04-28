@@ -9,6 +9,7 @@ import com.example.demo.model.enums.StatutVerger;
 import com.example.demo.repository.*;
 import com.example.demo.service.TourneeService;
 import com.example.demo.service.CollecteService;
+import com.example.demo.service.VergerService;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,7 @@ public class TourneeServiceImpl implements TourneeService {
     private final CollecteRepository collecteRepo;
 @Autowired
     private final CollecteService collecteService;
+    private final VergerService vergerService;
 
 
     private static final String NO_EXCLUDE = "000000000000000000000000";
@@ -198,6 +200,7 @@ public class TourneeServiceImpl implements TourneeService {
 
         Tournee saved = tourneeRepo.save(tournee);
         collecteService.updateCollecteStats(collecte.getId());
+        vergerService.recomputeStatutForVerger(verger.getId());
 
         System.out.println("✅ Tournée créée avec succès: " + saved.getCode());
         return toResponse(saved);
@@ -272,7 +275,11 @@ public class TourneeServiceImpl implements TourneeService {
             }
         }
         
-        return toResponse(tourneeRepo.save(tournee));
+        Tournee saved = tourneeRepo.save(tournee);
+        if (saved.getVerger() != null && saved.getVerger().getId() != null) {
+            vergerService.recomputeStatutForVerger(saved.getVerger().getId());
+        }
+        return toResponse(saved);
     }
 
     @Override
@@ -321,6 +328,7 @@ public class TourneeServiceImpl implements TourneeService {
         }
         
         checkAndCloseVerger(tournee.getVerger().getId());
+        vergerService.recomputeStatutForVerger(tournee.getVerger().getId());
         return toResponse(tournee);
     }
 
@@ -338,7 +346,11 @@ public class TourneeServiceImpl implements TourneeService {
 
         tournee.setStatut(StatutTournee.ANNULEE);
         tournee.setCollecteFinalisee(false);
-        return toResponse(tourneeRepo.save(tournee));
+        Tournee saved = tourneeRepo.save(tournee);
+        if (saved.getVerger() != null && saved.getVerger().getId() != null) {
+            vergerService.recomputeStatutForVerger(saved.getVerger().getId());
+        }
+        return toResponse(saved);
     }
     
     // ========== UPDATE / DELETE ==========
@@ -380,7 +392,11 @@ public class TourneeServiceImpl implements TourneeService {
         Tournee tournee = findOrThrow(id);
         if (tournee.getStatut() == StatutTournee.EN_COURS || tournee.getStatut() == StatutTournee.TERMINEE)
             throw new IllegalStateException("Seules les tournées PLANIFIÉE ou ANNULÉE peuvent être supprimées.");
+        String vergerId = tournee.getVerger() != null ? tournee.getVerger().getId() : null;
         tourneeRepo.delete(tournee);
+        if (vergerId != null) {
+            vergerService.recomputeStatutForVerger(vergerId);
+        }
     }
 
     // ========== AGGREGATES ==========
