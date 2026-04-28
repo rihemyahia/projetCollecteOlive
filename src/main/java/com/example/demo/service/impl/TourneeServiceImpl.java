@@ -24,13 +24,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class TourneeServiceImpl implements TourneeService {
-
+@Autowired
     private final TourneeRepository tourneeRepo;
+@Autowired
     private final VergerRepository vergerRepo;
+@Autowired
     private final RessourceRepository ressourceRepo;
+@Autowired
     private final UtilisateurRepository utilisateurRepo;
+@Autowired
     private final CollecteRepository collecteRepo;
+@Autowired
     private final CollecteService collecteService;
+
 
     private static final String NO_EXCLUDE = "000000000000000000000000";
 

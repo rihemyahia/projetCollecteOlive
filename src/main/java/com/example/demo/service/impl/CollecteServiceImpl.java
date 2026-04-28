@@ -12,7 +12,11 @@ import com.example.demo.repository.CollecteRepository;
 import com.example.demo.repository.TourneeRepository;
 import com.example.demo.repository.VergerRepository;
 import com.example.demo.service.CollecteService;
+import com.example.demo.service.MeteoService;
+
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +30,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class CollecteServiceImpl implements CollecteService {
-
+@Autowired
     private final CollecteRepository collecteRepo;
+@Autowired
     private final TourneeRepository tourneeRepo;
+@Autowired
     private final VergerRepository vergerRepo;
+@Autowired
+private final MeteoService meteoService;  // ← À ajouter
 
     @Override
     public Collecte getById(String id) {
@@ -137,31 +145,53 @@ public class CollecteServiceImpl implements CollecteService {
                 .verger(verger)
                 .build();
     }
+@Override
+public Collecte createNewCollecte(Verger verger, String annee, Date dateDebut) {
+    // Get next numero for this verger and year
+    Integer nextNumero = collecteRepo.findMaxNumeroByVergerIdAndAnnee(verger.getId(), annee)
+            .orElse(0) + 1;
 
-    @Override
-    public Collecte createNewCollecte(Verger verger, String annee, Date dateDebut) {
-        // Get next numero for this verger and year
-        Integer nextNumero = collecteRepo.findMaxNumeroByVergerIdAndAnnee(verger.getId(), annee)
-                .orElse(0) + 1;
+    String code = "C-" + verger.getId() + "-" + annee + "-" + String.format("%02d", nextNumero);
 
-        String code = "C-" + verger.getId() + "-" + annee + "-" + String.format("%02d", nextNumero);
-
-        Collecte collecte = Collecte.builder()
-                .code(code)
-                .statut(StatutCollecte.PLANIFIEE)
-                .annee(annee)
-                .numero(nextNumero)
-                .vergerId(verger.getId())
-                .dateDebutCampagne(dateDebut)
-                .nbreTournees(0)
-                .quantiteTotaleKg(0.0)
-                .totalArbresRecoltes(0)
-                .estCloturee(false)
-                .dateCreation(new Date())
-                .build();
-        return collecteRepo.save(collecte);
+    // 🔥 VÉRIFICATION OBLIGATOIRE DE LA GÉOLOCALISATION
+    if (verger.getGeolocalisation() == null || verger.getGeolocalisation().getLatitude() == null) {
+        throw new RuntimeException("Impossible de créer une collecte : le verger n'a pas de géolocalisation");
+    }
+    
+    double lat = verger.getGeolocalisation().getLatitude();
+    double lon = verger.getGeolocalisation().getLongitude();
+    
+    double precipitations;
+    double temperature;
+    
+    try {
+        precipitations = meteoService.getPrecipitationForCoordinates(lat, lon);
+        temperature = meteoService.getTemperature(lat, lon);
+        System.out.println("🌤️ Météo récupérée pour " + (verger.getAgriculteur() != null ? verger.getId() : "verger") + 
+            ": " + precipitations + " mm, " + temperature + "°C");
+    } catch (Exception e) {
+        throw new RuntimeException("Erreur lors de la récupération des données météo pour le verger: " + e.getMessage());
     }
 
+    Collecte collecte = Collecte.builder()
+            .code(code)
+            .statut(StatutCollecte.PLANIFIEE)
+            .annee(annee)
+            .numero(nextNumero)
+            .vergerId(verger.getId())
+            .dateDebutCampagne(dateDebut)
+            .nbreTournees(0)
+            .quantiteTotaleKg(0.0)
+            .totalArbresRecoltes(0)
+            .estCloturee(false)
+            .precipitations(precipitations)
+            .temperature(temperature)
+            .dateCreation(new Date())
+            .build();
+    
+    System.out.println("✅ Collecte créée avec météo: " + precipitations + " mm, " + temperature + "°C");
+    return collecteRepo.save(collecte);
+}
     @Override
     public void updateCollecteStats(String collecteId) {
         System.out.println("=== 📊 updateCollecteStats START ===");

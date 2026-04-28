@@ -1,15 +1,18 @@
-package com.example.demo.service;
+package com.example.demo.service.impl;
 
 import com.example.demo.model.Ressource;
 import com.example.demo.model.TypeRessource;
 import com.example.demo.repository.RessourceRepository;
+import com.example.demo.service.BenneServices;
+import com.example.demo.service.RessourceService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
 @Service
-public class BenneService {
+public class BenneServiceImpl implements BenneServices {
 
     @Autowired private RessourceRepository ressourceRepository;
     @Autowired private RessourceService    ressourceService;

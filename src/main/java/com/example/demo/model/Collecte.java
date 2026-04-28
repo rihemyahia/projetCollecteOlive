@@ -22,10 +22,13 @@ public class Collecte {
 
     @Id
     private String id;
+ // Ajoute ces 2 champs dans ta classe Collecte, après les autres champs
 
+ // ── Weather data (auto-filled from API) ─────────────────────────────────────
+ private Double precipitations;   // Précipitations annuelles en mm
+ private Double temperature;       // Température moyenne en °C
     private String code;
     private StatutCollecte statut;
-
     // ── Campaign identification ───────────────────────────────────────────────
     private String annee;           // e.g., "2024-2025"
     private Integer numero;          // 1, 2, 3 for multiple collectes per year

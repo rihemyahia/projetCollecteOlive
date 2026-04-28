@@ -12,6 +12,7 @@ import com.example.demo.repository.VergerRepository;
 import com.example.demo.service.CalendrierService;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -27,10 +28,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class CalendrierServiceImpl implements CalendrierService {
-
+	@Autowired
     private final TourneeRepository tourneeRepo;
+	@Autowired
     private final TourneeServiceImpl tourneeService;
+	@Autowired
     private final UtilisateurRepository utilisateurRepo;
+	@Autowired
     private final VergerRepository vergerRepo;
 
     @Override

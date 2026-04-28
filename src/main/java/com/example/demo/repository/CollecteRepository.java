@@ -107,7 +107,7 @@ public interface CollecteRepository extends MongoRepository<Collecte, String> {
      * Check if a verger has any terminated collecte
      */
     boolean existsByVergerIdAndStatut(String vergerId, StatutCollecte statut);
-    
+
     // ═══════════════════════════════════════════════════════════════
     // DELETE OPERATIONS
     // ═══════════════════════════════════════════════════════════════
