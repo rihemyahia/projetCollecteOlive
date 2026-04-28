@@ -1,7 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.model.Ressource;
-import com.example.demo.service.BenneService;
+import com.example.demo.service.impl.BenneServiceImpl;
 import com.example.demo.service.impl.TracteurServiceImpl;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:4200")
 public class RessourceController {
 
-    @Autowired private BenneService    benneService;
+    @Autowired private BenneServiceImpl    benneServiceImpl;
     @Autowired private TracteurServiceImpl tracteurServiceImpl;
 
     // ══════════════════════════════════════════════════════════════
@@ -34,7 +34,7 @@ public class RessourceController {
                 return ResponseEntity.badRequest().body(Map.of("error", "L'immatriculation est requise"));
             if (benne.getCapaciteKg() == null || benne.getCapaciteKg() <= 0)
                 return ResponseEntity.badRequest().body(Map.of("error", "La capacité doit être positive"));
-            return ResponseEntity.ok(benneService.creerBenne(benne));
+            return ResponseEntity.ok(benneServiceImpl.creerBenne(benne));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -42,48 +42,48 @@ public class RessourceController {
 
     @GetMapping("/bennes")
     public ResponseEntity<List<Ressource>> getAllBennes() {
-        return ResponseEntity.ok(benneService.listerBennes());
+        return ResponseEntity.ok(benneServiceImpl.listerBennes());
     }
 
     @GetMapping("/bennes/{id}")
     public ResponseEntity<?> getBenne(@PathVariable String id) {
-        try { return ResponseEntity.ok(benneService.getBenneById(id)); }
+        try { return ResponseEntity.ok(benneServiceImpl.getBenneById(id)); }
         catch (RuntimeException e) { return ResponseEntity.notFound().build(); }
     }
 
     @PutMapping("/bennes/{id}")
     public ResponseEntity<?> updateBenne(@PathVariable String id, @RequestBody Ressource benne) {
-        try { return ResponseEntity.ok(benneService.mettreAJourBenne(id, benne)); }
+        try { return ResponseEntity.ok(benneServiceImpl.mettreAJourBenne(id, benne)); }
         catch (RuntimeException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @DeleteMapping("/bennes/{id}")
     public ResponseEntity<?> deleteBenne(@PathVariable String id) {
-        try { benneService.supprimerBenne(id); return ResponseEntity.ok(Map.of("message", "Benne supprimée")); }
+        try { benneServiceImpl.supprimerBenne(id); return ResponseEntity.ok(Map.of("message", "Benne supprimée")); }
         catch (RuntimeException e) { return ResponseEntity.notFound().build(); }
     }
 
     @PostMapping("/bennes/{id}/charger")
     public ResponseEntity<?> chargerBenne(@PathVariable String id, @RequestParam Double quantite) {
-        try { return ResponseEntity.ok(benneService.ajouterCharge(id, quantite)); }
+        try { return ResponseEntity.ok(benneServiceImpl.ajouterCharge(id, quantite)); }
         catch (RuntimeException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @PostMapping("/bennes/{id}/vider")
     public ResponseEntity<?> viderBenne(@PathVariable String id) {
-        try { return ResponseEntity.ok(benneService.viderBenne(id)); }
+        try { return ResponseEntity.ok(benneServiceImpl.viderBenne(id)); }
         catch (RuntimeException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @PostMapping("/bennes/{id}/maintenance")
     public ResponseEntity<?> startBenneMaintenance(@PathVariable String id) {
-        try { return ResponseEntity.ok(benneService.enregistrerMaintenance(id, "Maintenance programmée", null)); }
+        try { return ResponseEntity.ok(benneServiceImpl.enregistrerMaintenance(id, "Maintenance programmée", null)); }
         catch (RuntimeException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 
     @PostMapping("/bennes/{id}/maintenance/end")
     public ResponseEntity<?> endBenneMaintenance(@PathVariable String id) {
-        try { return ResponseEntity.ok(benneService.terminerMaintenance(id)); }
+        try { return ResponseEntity.ok(benneServiceImpl.terminerMaintenance(id)); }
         catch (RuntimeException e) { return ResponseEntity.badRequest().body(Map.of("error", e.getMessage())); }
     }
 

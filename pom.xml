@@ -75,12 +75,13 @@
 			<version>0.11.5</version>
 			<scope>runtime</scope>
 		</dependency>
+		
 		<!-- Swagger/OpenAPI pour Spring Boot 3 -->
-<dependency>
-    <groupId>org.springdoc</groupId>
-    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-    <version>2.3.0</version>
-</dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.3.0</version>
+		</dependency>
 		
 		<!-- Lombok -->
 		<dependency>
@@ -88,7 +89,10 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+<!-- Mockito Core (explicit) -->
 
+	
+	
 		<!-- DevTools -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -97,17 +101,37 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- Test -->
+		<!-- Test Dependencies (spring-boot-starter-test includes everything you need) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>4.11.0</version>
+            <scope>test</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>4.11.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Compatibilité JUnit 4 avec Spring Boot 3 -->
+<dependency>
+    <groupId>org.junit.vintage</groupId>
+    <artifactId>junit-vintage-engine</artifactId>
+    <scope>test</scope>
+</dependency>
 	</dependencies>
 
 	<build>
