@@ -16,7 +16,9 @@ import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.DocumentReference;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Builder
@@ -62,4 +64,7 @@ public class AlerteTerrain {
     private Date dateSignalement;
 
     private Date dateMiseAJour;
+
+    @Builder.Default
+    private List<String> photoUrls = new ArrayList<>();
 }

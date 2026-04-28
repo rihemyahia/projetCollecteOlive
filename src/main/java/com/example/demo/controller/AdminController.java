@@ -1,16 +1,31 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.AdminResponsableVergersResponse;
+import com.example.demo.dto.AdminUpdateAgriculteurRequest;
+import com.example.demo.dto.AdminUpdateResponsableRequest;
+import com.example.demo.dto.VergerRequest;
+import com.example.demo.dto.VergerResponse;
+import com.example.demo.model.Role;
 import com.example.demo.model.Utilisateur;
+import com.example.demo.model.Verger;
+import com.example.demo.repository.UtilisateurRepository;
+import com.example.demo.repository.VergerRepository;
+import com.example.demo.service.VergerService;
 import com.example.demo.service.impl.AuthServiceImpl;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth/admin")
@@ -20,6 +35,15 @@ public class AdminController {
 
     @Autowired
     private AuthServiceImpl authServiceImpl;
+
+    @Autowired
+    private UtilisateurRepository utilisateurRepository;
+
+    @Autowired
+    private VergerRepository vergerRepository;
+
+    @Autowired
+    private VergerService vergerService;
 
     // ========== CRUD UTILISATEURS ==========
     
@@ -147,5 +171,133 @@ public class AdminController {
         stats.put("agriculteursEnAttente", authServiceImpl.compterAgriculteursEnAttente());
         stats.put("travailleursEnAttente", authServiceImpl.compterTravailleursEnAttente());
         return ResponseEntity.ok(stats);
+    }
+
+    // ========== ADMIN : VERGERS ==========
+
+    /**
+     * Admin-only verger creation: admin MUST specify responsableId in the request body.
+     * Reuses the existing verger creation logic.
+     */
+    @PostMapping("/vergers")
+    public ResponseEntity<?> creerVergerParAdmin(
+            @RequestBody VergerRequest req,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(vergerService.creer(req, userDetails));
+    }
+
+    // ========== ADMIN : RESPONSABLES ==========
+
+    /**
+     * Update responsable fields only.
+     * Verger assignment/unassignment is intentionally not handled here.
+     */
+    @PatchMapping("/responsables/{id}")
+    public ResponseEntity<Utilisateur> adminUpdateResponsable(
+            @PathVariable String id,
+            @RequestBody AdminUpdateResponsableRequest req) {
+
+        Utilisateur responsable = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Responsable non trouvé avec l'id: " + id));
+
+        // Basic field updates (only if provided)
+        if (req.getPrenom() != null) responsable.setPrenom(req.getPrenom());
+        if (req.getNom() != null) responsable.setNom(req.getNom());
+        if (req.getTelephone() != null) responsable.setTelephone(req.getTelephone());
+        if (req.getAdresse() != null) responsable.setAdresse(req.getAdresse());
+        if (req.getFonction() != null) responsable.setFonction(req.getFonction());
+        if (req.getDatePrisePoste() != null) responsable.setDatePrisePoste(req.getDatePrisePoste());
+
+        Utilisateur savedResponsable = utilisateurRepository.save(responsable);
+
+        return ResponseEntity.ok(savedResponsable);
+    }
+
+    // ========== ADMIN : AGRICULTEURS ==========
+
+    /**
+     * Update agriculteur fields only.
+     * Verger assignment/unassignment is intentionally not handled here.
+     */
+    @PatchMapping("/agriculteurs/{id}")
+    public ResponseEntity<Utilisateur> adminUpdateAgriculteur(
+            @PathVariable String id,
+            @RequestBody AdminUpdateAgriculteurRequest req) {
+
+        Utilisateur agriculteur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Agriculteur non trouvé avec l'id: " + id));
+
+        if (req.getPrenom() != null) agriculteur.setPrenom(req.getPrenom());
+        if (req.getNom() != null) agriculteur.setNom(req.getNom());
+        if (req.getTelephone() != null) agriculteur.setTelephone(req.getTelephone());
+        if (req.getAdresse() != null) agriculteur.setAdresse(req.getAdresse());
+        if (req.getNomExploitation() != null) agriculteur.setNomExploitation(req.getNomExploitation());
+
+        Utilisateur savedAgriculteur = utilisateurRepository.save(agriculteur);
+
+        return ResponseEntity.ok(savedAgriculteur);
+    }
+
+    /**
+     * Returns each RESPONSABLE with the list of vergers they manage.
+     * Data source: Verger.responsable (not Utilisateur.vergers).
+     */
+    @GetMapping("/responsables/vergers")
+    public ResponseEntity<List<AdminResponsableVergersResponse>> getResponsablesAvecVergers() {
+        List<Utilisateur> responsables = utilisateurRepository.findByRole(Role.RESPONSABLE);
+
+        // Fetch all active vergers once, then group by responsableId
+        Map<String, List<VergerResponse>> vergersByResponsableId = vergerRepository.findByEstSupprimerFalse().stream()
+                .filter(v -> v.getResponsable() != null && v.getResponsable().getId() != null)
+                .collect(Collectors.groupingBy(
+                        v -> v.getResponsable().getId(),
+                        Collectors.mapping(this::toVergerResponse, Collectors.toList())
+                ));
+
+        List<AdminResponsableVergersResponse> out = responsables.stream()
+                .map(r -> AdminResponsableVergersResponse.builder()
+                        .responsableId(r.getId())
+                        .responsableNom(((r.getPrenom() != null ? r.getPrenom() : "") + " " + (r.getNom() != null ? r.getNom() : "")).trim())
+                        .responsableEmail(r.getEmail())
+                        .fonction(r.getFonction())
+                        .vergers(vergersByResponsableId.getOrDefault(r.getId(), Collections.emptyList()))
+                        .build())
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(out);
+    }
+
+    private VergerResponse toVergerResponse(Verger v) {
+        Utilisateur ag = v.getAgriculteur();
+        Utilisateur resp = v.getResponsable();
+
+        String agriculteurNom = ag != null
+                ? (Optional.ofNullable(ag.getPrenom()).orElse("") + " " + Optional.ofNullable(ag.getNom()).orElse("")).trim()
+                : null;
+
+        String responsableNom = resp != null
+                ? (Optional.ofNullable(resp.getPrenom()).orElse("") + " " + Optional.ofNullable(resp.getNom()).orElse("")).trim()
+                : null;
+
+        return VergerResponse.builder()
+                .id(v.getId())
+                .agriculteurId(ag != null ? ag.getId() : null)
+                .agriculteurNom(agriculteurNom)
+                .agriculteurEmail(ag != null ? ag.getEmail() : null)
+                .responsableId(resp != null ? resp.getId() : null)
+                .responsableNom(responsableNom)
+                .responsableEmail(resp != null ? resp.getEmail() : null)
+                .responsableFonction(resp != null ? resp.getFonction() : null)
+                .superficie(v.getSuperficie())
+                .typeOlive(v.getTypeOlive())
+                .rendementEstime(v.getRendementEstime())
+                .maturiteActuelle(v.getMaturiteActuelle())
+                .nbArbre(v.getNbArbre())
+                .statut(v.getStatut())
+                .dateDerniereRecolte(v.getDateDerniereRecolte())
+                .estSupprimer(v.getEstSupprimer())
+                .dateCreation(v.getDateCreation())
+                .geolocalisation(v.getGeolocalisation())
+                .build();
     }
 }

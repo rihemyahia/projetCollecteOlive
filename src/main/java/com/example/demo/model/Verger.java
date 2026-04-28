@@ -38,6 +38,10 @@ public class Verger {
     private int nbArbre;
 
     private StatutVerger statut;
+    private StatutVerger statutOverride;
+    private String statutOverrideReason;
+    private String statutOverrideByUserId;
+    private Date statutOverrideAt;
 
     private Date dateDerniereRecolte;
 

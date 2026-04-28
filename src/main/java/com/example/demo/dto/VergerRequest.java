@@ -28,6 +28,7 @@ public class VergerRequest {
     private Integer maturiteActuelle;
 
     private StatutVerger statut;
+    private String statutOverrideReason;
 
     // ── Geolocation fields (optional — a verger can exist without GPS coords) ──
     /**
