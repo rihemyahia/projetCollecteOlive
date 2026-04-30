@@ -22,7 +22,9 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     
     @Query("{ 'statut': { $in: ['PLANIFIEE', 'EN_COURS'] } }")
     List<Tournee> findActive();
-    
+ // Ajoutez cette méthode
+    @Query("{ 'verger._id': { $in: ?0 } }")
+    List<Tournee> findByVergerIdIn(List<String> vergerIds);
     boolean existsByCode(String code);
     
     @Query("{ 'vergerId': ?0, 'statut': 'TERMINEE' }")
@@ -31,7 +33,7 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     // ✅ FIXED CONFLICT QUERY FOR BENNE
     @Query("{ " +
             "  'benne.id': ?0, " +
-            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS'] }, " +
+            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS','TERMINEE'] }, " +
             "  '_id': { $ne: ?3 }, " +
             "  $or: [ " +
             "    { $and: [ { 'dateDebut': { $lt: ?2 } }, { 'dateFin': { $gt: ?1 } } ] }, " +
@@ -44,7 +46,7 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     // ✅ FIXED CONFLICT QUERY FOR TRACTEUR
     @Query("{ " +
             "  'tracteur.id': ?0, " +
-            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS'] }, " +
+            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS','TERMINEE'] }, " +
             "  '_id': { $ne: ?3 }, " +
             "  $or: [ " +
             "    { $and: [ { 'dateDebut': { $lt: ?2 } }, { 'dateFin': { $gt: ?1 } } ] }, " +
@@ -58,8 +60,9 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     List<Tournee> findByDateDebutBetween(Date debut, Date fin);
     @Query("{ 'travailleurs': { $in: [ObjectId(?0)] }, 'dateDebut': { $gte: ?1, $lte: ?2 } }")
     List<Tournee> findByTravailleursIdAndDateDebutBetween(String travailleurId, Date debut, Date fin);
-     @Query("{ 'verger': { $in: ?0 }, 'dateDebut': { $gte: ?1, $lte: ?2 } }")
-    List<Tournee> findByVergerIdInAndDateDebutBetween(List<ObjectId> vergerIds, Date debut, Date fin);    List<Tournee> findByVergerIdAndDateDebutBetween(String vergerId, Date debut, Date fin);
+    @Query("{ 'verger': { $in: ?0 }, 'dateDebut': { $gte: ?1, $lte: ?2 } }")
+    List<Tournee> findByVergerIdInAndDateDebutBetween(List<ObjectId> vergerIds, Date debut, Date fin);
+     List<Tournee> findByVergerIdAndDateDebutBetween(String vergerId, Date debut, Date fin);
     @Query("{ 'verger': { $oid: ?0 }, 'travailleurs': { $in: [ObjectId(?1)] }, 'dateDebut': { $gte: ?2, $lte: ?3 } }")
     List<Tournee> findByVergerIdAndTravailleurIdAndDateDebutBetween(
         String vergerId, 
@@ -73,7 +76,7 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     // ✅ FIXED CONFLICT QUERY FOR TRAVAILLEUR
     @Query("{ " +
             "  'travailleurs': { $in: [ObjectId(?0)] }, " +
-            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS'] }, " +
+            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS','TERMINEE'] }, " +
             "  '_id': { $ne: ?3 }, " +
             "  $or: [ " +
             "    { $and: [ { 'dateDebut': { $lt: ?2 } }, { 'dateFin': { $gt: ?1 } } ] }, " +

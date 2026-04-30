@@ -49,4 +49,5 @@ public interface VergerService {
      * Find vergers within maxDistanceMetres of the given coordinate.
      */
     List<VergerResponse> findNearby(Double longitude, Double latitude, Double maxDistanceMetres);
+	VergerResponse changerStatut(String id, StatutVerger statut);
 }

@@ -83,42 +83,120 @@ public class CalendrierServiceImpl implements CalendrierService {
         List<Tournee> tournees = new ArrayList<>();
         
         switch (user.getRole()) {
-            case ADMIN:
-            case RESPONSABLE:
-                tournees = tourneeRepo.findByDateDebutBetween(debut, fin);
-                System.out.println("👑 " + user.getRole() + " voit " + tournees.size() + " tournée(s)");
-                break;
+            case ADMIN:   // ✅ ADMIN voit TOUTES les tournées dans la plage de dates
+                System.out.println("========== ADMIN DEBUG ==========");
+                System.out.println("Admin ID: " + user.getId());
+                System.out.println("📅 Période demandée:");
+                System.out.println("   Debut: " + debut);
+                System.out.println("   Fin: " + fin);
                 
+                tournees = tourneeRepo.findByDateDebutBetween(debut, fin);
+                
+                System.out.println("Tournées trouvées pour ADMIN: " + tournees.size());
+                for (Tournee t : tournees) {
+                    System.out.println("  - " + t.getCode() + " | Date: " + t.getDateDebut());
+                }
+                System.out.println("=====================================");
+                break;
+            case RESPONSABLE:
+                System.out.println("========== RESPONSABLE DEBUG ==========");
+                System.out.println("Responsable ID: " + user.getId());
+                System.out.println("📅 Période demandée:");
+                System.out.println("   Debut: " + debut);
+                System.out.println("   Fin: " + fin);
+                ObjectId responsableObjectId = new ObjectId(user.getId());
+
+                List<Verger> vergersResponsable = vergerRepo.findByResponsableIdAndEstSupprimerFalse(responsableObjectId);
+                System.out.println("Vergers trouvés: " + vergersResponsable.size());
+                
+                tournees = new ArrayList<>();
+                
+                for (Verger v : vergersResponsable) {
+                    System.out.println("Recherche tournées pour verger ID: " + v.getId());
+                    List<Tournee> tourneesVerger = tourneeRepo.findByVergerId(v.getId());
+                    System.out.println("  Tournées brutes: " + tourneesVerger.size());
+                    
+                    // Afficher les dates des tournées trouvées
+                    for (Tournee t : tourneesVerger) {
+                        System.out.println("    - " + t.getCode() + " | Date: " + t.getDateDebut() + " | Statut: " + t.getStatut());
+                    }
+                    
+                    tournees.addAll(tourneesVerger);
+                }
+                
+                System.out.println("Total tournées AVANT filtre date: " + tournees.size());
+                
+                // Filtrer par date avec logs
+                tournees = tournees.stream()
+                    .filter(t -> {
+                        Date dateDebut = t.getDateDebut();
+                        boolean isInRange = dateDebut != null && !dateDebut.before(debut) && !dateDebut.after(fin);
+                        if (!isInRange && dateDebut != null) {
+                            System.out.println("    ❌ Tournée " + t.getCode() + " exclue: " + dateDebut + " hors de [" + debut + ", " + fin + "]");
+                        } else if (isInRange) {
+                            System.out.println("    ✅ Tournée " + t.getCode() + " incluse: " + dateDebut);
+                        }
+                        return isInRange;
+                    })
+                    .collect(Collectors.toList());
+                
+                System.out.println("Tournées trouvées pour RESPONSABLE après filtrage: " + tournees.size());
+                System.out.println("=====================================");
+                break; 
+               
+            
             case AGRICULTEUR:
                 System.out.println("========== AGRICULTEUR DEBUG ==========");
                 System.out.println("User ID: " + user.getId());
                 System.out.println("User Email: " + user.getEmail());
                 
-                List<Verger> vergers = vergerRepo.findByAgriculteurIdAndEstSupprimerFalse(user.getId());
+                // Méthode 1: Utiliser @Query avec String
+                ObjectId agriculteurObjectId = new ObjectId(user.getId());
+
+                List<Verger> vergers = vergerRepo.findActiveByAgriculteurId(agriculteurObjectId);
+                
+                // Ou Méthode 2: Convertir en ObjectId si nécessaire
+                // ObjectId agriculteurObjectId = new ObjectId(user.getId());
+                // List<Verger> vergers = vergerRepo.findByAgriculteurIdAndEstSupprimerFalse(agriculteurObjectId);
+                
                 System.out.println("Number of vergers found: " + vergers.size());
                 
                 for (Verger v : vergers) {
                     System.out.println("  Verger ID: " + v.getId() + " | Type: " + v.getTypeOlive());
                 }
                 
-                // ✅ Convert String IDs to ObjectId - filter out any nulls
-                List<ObjectId> objectIds = vergers.stream()
-                    .filter(v -> v.getId() != null && !v.getId().isEmpty())
-                    .map(v -> new ObjectId(v.getId()))
+                List<String> vergerIds = vergers.stream()
+                    .map(Verger::getId)
                     .collect(Collectors.toList());
                 
-                System.out.println("ObjectIds: " + objectIds);
+                System.out.println("Verger IDs: " + vergerIds);
                 System.out.println("Date range - Debut: " + debut + " | Fin: " + fin);
                 
-                if (!objectIds.isEmpty()) {
-                    // ✅ Remove the problematic debug loop
-                    tournees = tourneeRepo.findByVergerIdInAndDateDebutBetween(objectIds, debut, fin);
-                    System.out.println("Tournées found by filter: " + tournees.size());
+                if (!vergerIds.isEmpty()) {
+                    // Récupérer toutes les tournées de ces vergers
+                    List<Tournee> allTournees = new ArrayList<>();
+                    for (String vId : vergerIds) {
+                        List<Tournee> tourneesByVerger = tourneeRepo.findByVergerId(vId);
+                        allTournees.addAll(tourneesByVerger);
+                    }
+                    
+                    // Filtrer par date
+                    tournees = allTournees.stream()
+                        .filter(t -> {
+                            Date dateDebut = t.getDateDebut();
+                            return dateDebut != null && !dateDebut.before(debut) && !dateDebut.after(fin);
+                        })
+                        .collect(Collectors.toList());
+                    
+                    System.out.println("Tournées found: " + tournees.size());
+                    for (Tournee t : tournees) {
+                        System.out.println("  - " + t.getCode() + " | Date: " + t.getDateDebut());
+                    }
                 } else {
                     System.out.println("⚠️ No valid vergers found for this agriculteur!");
                 }
                 System.out.println("=====================================");
-                break;
+                break;       
             case TRAVAILLEUR:
                 tournees = tourneeRepo.findByTravailleursIdAndDateDebutBetween(user.getId(), debut, fin);
                 System.out.println("👤 TRAVAILLEUR " + user.getPrenom() + " " + user.getNom() + " voit " + tournees.size() + " tournée(s)");

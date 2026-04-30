@@ -22,7 +22,9 @@ public interface VergerRepository extends MongoRepository<Verger, String> {
 
     @Query(value = "{ 'agriculteur' : ?0 }", exists = true)
     boolean existsByAgriculteurId(ObjectId agriculteurId);
-
+    
+    @Query("{ 'agriculteur': ?0, 'estSupprimer': false }")
+    List<Verger> findVergersByAgriculteur(ObjectId agriculteurId);
     // ── Geolocation queries ─────────────────────────────────────────────────
 
     /**
@@ -47,14 +49,14 @@ public interface VergerRepository extends MongoRepository<Verger, String> {
      */
     @Query("{ 'location': { $nearSphere: { $geometry: { type: 'Point', coordinates: [?0, ?1] }, $maxDistance: ?2 } }, 'estSupprimer': false }")
     List<Verger> findNearby(Double longitude, Double latitude, Double maxDistanceMetres);
-
+ // Dans VergerRepository.java
+    @Query("{ 'agriculteur': ?0, 'estSupprimer': false }")
+    List<Verger> findByAgriculteurAndEstSupprimerFalse(String agriculteurId);
     @Query("{ 'responsable' : ?0, 'estSupprimer' : false }")
     List<Verger> findByResponsableIdAndEstSupprimerFalse(ObjectId responsableId);
 
 	List<Verger> findByResponsableId(String responsableId);
 
-    @Query("{ 'responsable' : ?0, 'estSupprimer' : false }")
-    List<Verger> findByResponsableIdAndEstSupprimerFalse(String responsableId);
 
     @Query("{ 'agriculteur': ?0, 'estSupprimer': false }")
     List<Verger> findByAgriculteurIdAndEstSupprimerFalse(String agriculteurId);

@@ -41,7 +41,28 @@ public class VergerServiceImpl implements VergerService {
     private final TourneeRepository tourneeRepo;
 
     // ── CREATE ────────────────────────────────────────────────────────────────
-
+    @Override
+    public VergerResponse changerStatut(String id, StatutVerger statut) {
+        // 1. Récupérer le verger
+        Verger verger = findOrThrow(id);
+        
+        // 2. Récupérer l'ancien statut (pour comparaison)
+        StatutVerger ancienStatut = verger.getStatut();
+        
+        // 3. Mettre à jour le statut
+        verger.setStatut(statut);
+        
+        // 4. Si le nouveau statut est RECOLTE, mettre à jour la date de dernière récolte
+        if (statut == StatutVerger.RECOLTE && ancienStatut != StatutVerger.RECOLTE) {
+            verger.setDateDerniereRecolte(new Date());
+        }
+        
+        // 5. Sauvegarder
+        Verger saved = vergerRepo.save(verger);
+        
+        // 6. Retourner la réponse
+        return toResponse(saved);
+    }
     @Override
     public VergerResponse creer(VergerRequest req, UserDetails userDetails) {
         Utilisateur agriculteur = getAgriculteurOrThrow(req.getAgriculteurId());

@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -20,6 +21,7 @@ import java.util.List;
 public class CalendrierController {
 
     private final CalendrierService calendrierService;
+
     @GetMapping("/verger/{vergerId}/travailleur/{travailleurId}")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
     @Operation(summary = "Planning par verger ET par travailleur")
@@ -28,9 +30,11 @@ public class CalendrierController {
             @PathVariable String travailleurId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date debut,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date fin) {
-        return ResponseEntity.ok(calendrierService.getEvenementsByVergerAndTravailleur(vergerId, travailleurId, debut, fin));
+        
+        Date finAjustee = ajusterFinJournee(fin);
+        return ResponseEntity.ok(calendrierService.getEvenementsByVergerAndTravailleur(vergerId, travailleurId, debut, finAjustee));
     }
-    // ✅ MODIFIÉ - Accessible à tous les rôles
+
     @GetMapping
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN', 'AGRICULTEUR', 'TRAVAILLEUR')")
     @Operation(summary = "Consulter le planning des collectes (filtré par rôle)")
@@ -38,11 +42,10 @@ public class CalendrierController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date debut,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date fin) {
         
-        // Le service filtre automatiquement selon l'utilisateur connecté
-        return ResponseEntity.ok(calendrierService.getEvenements(debut, fin));
+        Date finAjustee = ajusterFinJournee(fin);
+        return ResponseEntity.ok(calendrierService.getEvenements(debut, finAjustee));
     }
 
-    // ✅ GARDER - Pour admin/responsable uniquement
     @GetMapping("/verger/{vergerId}")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN', 'AGRICULTEUR')")
     @Operation(summary = "Planning par verger")
@@ -50,10 +53,11 @@ public class CalendrierController {
             @PathVariable String vergerId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date debut,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date fin) {
-        return ResponseEntity.ok(calendrierService.getEvenementsByVerger(vergerId, debut, fin));
+        
+        Date finAjustee = ajusterFinJournee(fin);
+        return ResponseEntity.ok(calendrierService.getEvenementsByVerger(vergerId, debut, finAjustee));
     }
 
-    // ✅ GARDER - Pour admin/responsable uniquement
     @GetMapping("/travailleur/{travailleurId}")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
     @Operation(summary = "Planning par travailleur (admin uniquement)")
@@ -61,10 +65,11 @@ public class CalendrierController {
             @PathVariable String travailleurId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date debut,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date fin) {
-        return ResponseEntity.ok(calendrierService.getEvenementsByTravailleur(travailleurId, debut, fin));
+        
+        Date finAjustee = ajusterFinJournee(fin);
+        return ResponseEntity.ok(calendrierService.getEvenementsByTravailleur(travailleurId, debut, finAjustee));
     }
 
-    // ✅ AJOUTER - Pour qu'un travailleur voie son propre planning
     @GetMapping("/mon-planning")
     @PreAuthorize("hasAnyRole('TRAVAILLEUR', 'AGRICULTEUR')")
     @Operation(summary = "Mon planning personnel (pour travailleur et agriculteur)")
@@ -72,14 +77,13 @@ public class CalendrierController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date debut,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) Date fin) {
         
-        // Récupérer l'utilisateur connecté
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
+        Date finAjustee = ajusterFinJournee(fin);
         
-        return ResponseEntity.ok(calendrierService.getEvenementsByUserEmail(email, debut, fin));
+        return ResponseEntity.ok(calendrierService.getEvenementsByUserEmail(email, debut, finAjustee));
     }
 
-    // ✅ GARDER - Pour admin/responsable uniquement
     @PutMapping("/{tourneeId}/reprogrammer")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
     @Operation(summary = "Reprogrammer une collecte")
@@ -88,5 +92,19 @@ public class CalendrierController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date nouvelleDate,
             @RequestParam(required = false) String raison) {
         return ResponseEntity.ok(calendrierService.reprogrammerEvenement(tourneeId, nouvelleDate, raison));
+    }
+
+    /**
+     * Ajuste la date de fin à 23:59:59 pour inclure toute la journée
+     */
+    private Date ajusterFinJournee(Date date) {
+        if (date == null) return null;
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.set(Calendar.HOUR_OF_DAY, 23);
+        cal.set(Calendar.MINUTE, 59);
+        cal.set(Calendar.SECOND, 59);
+        cal.set(Calendar.MILLISECOND, 999);
+        return cal.getTime();
     }
 }

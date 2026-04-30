@@ -17,6 +17,7 @@ import com.example.demo.service.MeteoService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,8 +49,10 @@ private final MeteoService meteoService;  // ← À ajouter
     }
     @Override
     public List<Collecte> getCollectesByResponsable(String responsableId) {
+        ObjectId responsableObjectId = new ObjectId(responsableId);
+
         // Récupérer tous les vergers assignés à ce responsable
-        List<Verger> vergersResponsable = vergerRepo.findByResponsableIdAndEstSupprimerFalse(responsableId);
+        List<Verger> vergersResponsable = vergerRepo.findByResponsableIdAndEstSupprimerFalse(responsableObjectId);
         
         if (vergersResponsable.isEmpty()) {
             return new ArrayList<>();
