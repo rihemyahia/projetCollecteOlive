@@ -15,9 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,12 +60,10 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
             throw new RuntimeException("L'utilisateur n'est pas un transporteur");
         }
 
-        List<Tournee> assignees = tourneeRepository.findAll().stream()
-                .filter(t -> t.getTransporteur() != null
-                        && t.getTransporteur().getId() != null
-                        && id.equals(t.getTransporteur().getId()))
-                .sorted(Comparator.comparing(Tournee::getDateDebut, Comparator.nullsFirst(Date::compareTo)))
-                .collect(Collectors.toList());
+        List<Tournee> assignees = tourneeRepository.findByTransporteurId(
+                id,
+                Sort.by(Sort.Direction.ASC, "dateDebut")
+        );
 
         Map<String, Object> response = new HashMap<>();
         response.put("transporteur", transporteur);
@@ -100,11 +95,18 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
                 ? request.getTourneesIds().stream().filter(x -> x != null && !x.isBlank()).collect(Collectors.toSet())
                 : Set.of();
 
-        List<Tournee> allTournees = new ArrayList<>(tourneeRepository.findAll());
+        List<Tournee> currentlyAssigned = tourneeRepository.findByTransporteurId(id, Sort.unsorted());
+        List<Tournee> requestedTournees = new java.util.ArrayList<>();
+        if (!targetIds.isEmpty()) {
+            tourneeRepository.findAllById(targetIds).forEach(requestedTournees::add);
+        }
+
+        if (!targetIds.isEmpty() && requestedTournees.size() != targetIds.size()) {
+            throw new RuntimeException("Certaines tournées demandées sont introuvables");
+        }
 
         // Validate requested tournées can be assigned to this transporteur.
-        for (Tournee t : allTournees) {
-            if (!targetIds.contains(t.getId())) continue;
+        for (Tournee t : requestedTournees) {
             if (t.getStatut() != StatutTournee.PLANIFIEE) {
                 throw new RuntimeException("Seules les tournées PLANIFIEE peuvent être assignées");
             }
@@ -115,22 +117,18 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
             }
         }
 
-        // Replace behavior:
-        // - Remove all current assignments from this transporteur that are not in targetIds
-        // - Assign targetIds to this transporteur
-        for (Tournee t : allTournees) {
-            boolean currentlyMine = t.getTransporteur() != null
-                    && t.getTransporteur().getId() != null
-                    && id.equals(t.getTransporteur().getId());
-            boolean shouldBeMine = targetIds.contains(t.getId());
-
-            if (currentlyMine && !shouldBeMine) {
+        // Replace behavior using targeted datasets:
+        // - Remove current assignments not present in targetIds
+        // - Assign requested tournées to this transporteur
+        for (Tournee t : currentlyAssigned) {
+            if (!targetIds.contains(t.getId())) {
                 t.setTransporteur(null);
                 tourneeRepository.save(t);
-            } else if (shouldBeMine) {
-                t.setTransporteur(transporteur);
-                tourneeRepository.save(t);
             }
+        }
+        for (Tournee t : requestedTournees) {
+            t.setTransporteur(transporteur);
+            tourneeRepository.save(t);
         }
 
         return getTourneesAssignees(id);

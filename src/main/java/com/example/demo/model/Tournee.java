@@ -78,5 +78,6 @@ public class Tournee {
 	private Date livraisonStartedAt;
 	private Date livraisonCompletedAt;
 	private String livraisonEvidenceName;
+	private String livraisonEvidenceUrl;
 	private String livraisonEvidenceBase64;
 }

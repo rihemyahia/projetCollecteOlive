@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Sort;
 
 import java.util.Date;
 import java.util.List;
@@ -46,6 +47,10 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     List<Tournee> findConflictsByBenne(String benneId, Date debut, Date fin, String excludeId);
     @Query("{ 'statut': ?0, 'transporteur': null }")
     Page<Tournee> findByStatutAndTransporteurIsNull(StatutTournee statut, Pageable pageable);
+    @Query("{ 'transporteur.id': ?0 }")
+    List<Tournee> findByTransporteurId(String transporteurId, Sort sort);
+    @Query("{ 'transporteur.id': ?0, 'statut': ?1 }")
+    List<Tournee> findByTransporteurIdAndStatut(String transporteurId, StatutTournee statut, Sort sort);
     // ✅ FIXED CONFLICT QUERY FOR TRACTEUR
     @Query("{ " +
             "  'tracteur.id': ?0, " +
