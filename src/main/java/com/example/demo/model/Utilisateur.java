@@ -1,5 +1,6 @@
 package com.example.demo.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -67,6 +68,8 @@ public class Utilisateur {
     private Boolean disponibleTransport;
     private Date dateObtentionPermis;
     private Integer anneesExperience;
+    // Utilisateur.java - The "back" part (gets serialized with reference ID only)
+    @JsonBackReference
     private List<Tournee> tourneesAssignees;
     private Double tarifKm;
    private boolean estSupprime;

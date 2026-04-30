@@ -4,6 +4,8 @@ import com.example.demo.model.StatutTournee;
 import com.example.demo.model.Tournee;
 import com.example.demo.model.Verger;
 import org.bson.types.ObjectId;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -42,7 +44,8 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
             "  ] " +
             "}")
     List<Tournee> findConflictsByBenne(String benneId, Date debut, Date fin, String excludeId);
-
+    @Query("{ 'statut': ?0, 'transporteur': null }")
+    Page<Tournee> findByStatutAndTransporteurIsNull(StatutTournee statut, Pageable pageable);
     // ✅ FIXED CONFLICT QUERY FOR TRACTEUR
     @Query("{ " +
             "  'tracteur.id': ?0, " +

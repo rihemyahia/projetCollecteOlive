@@ -48,8 +48,10 @@ public class SecurityConfig {
 
                         // 3. Management & Modules
                         .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/utilisateurs/**").hasRole("ADMIN")
                         .requestMatchers("/api/responsable/**").hasAnyRole("ADMIN", "RESPONSABLE")
+                        .requestMatchers("/api/transporteur/**").hasRole("TRANSPORTEUR")
                         .requestMatchers("/api/vergers/**", "/api/alertes/**").hasAnyRole("ADMIN", "RESPONSABLE", "AGRICULTEUR")
                         .requestMatchers("/api/tournees/**").hasAnyRole("ADMIN", "RESPONSABLE", "EQUIPE_RECOLTE")
                         .requestMatchers("/api/travailleurs/**").hasRole("RESPONSABLE")

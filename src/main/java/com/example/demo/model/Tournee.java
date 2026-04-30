@@ -44,6 +44,9 @@ public class Tournee {
 	@Builder.Default
 	private List<Utilisateur> travailleurs = new ArrayList<>();
 
+	@DocumentReference(lazy = true)
+	private Utilisateur transporteur;
+
 	/**
 	 * Planned start date (set at creation, updated when demarrer() is called). Used
 	 * for availability overlap checks.
@@ -70,4 +73,10 @@ public class Tournee {
 	private Collecte collecte;
 	@CreatedDate
 	private Date dateCreation;
+
+	// ========== LIVRAISON (proof & timestamps) ==========
+	private Date livraisonStartedAt;
+	private Date livraisonCompletedAt;
+	private String livraisonEvidenceName;
+	private String livraisonEvidenceBase64;
 }
