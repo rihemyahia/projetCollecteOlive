@@ -51,6 +51,10 @@ public class TourneeResponse {
     private Date livraisonEstimeDebut;
     private Date livraisonEstimeFin;
     private String livraisonNotes;
+    private String responsablePressoirId;
+    private String responsablePressoirNom;
+    private String pressoirNom;
+    private String pressoirAdresse;
     private Date livraisonStartedAt;
     private Date livraisonCompletedAt;
     private String livraisonEvidenceName;
