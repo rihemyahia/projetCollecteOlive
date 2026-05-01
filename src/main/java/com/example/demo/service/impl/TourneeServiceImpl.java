@@ -25,17 +25,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class TourneeServiceImpl implements TourneeService {
-    @Autowired
+@Autowired
     private final TourneeRepository tourneeRepo;
-    @Autowired
+@Autowired
     private final VergerRepository vergerRepo;
-    @Autowired
+@Autowired
     private final RessourceRepository ressourceRepo;
-    @Autowired
+@Autowired
     private final UtilisateurRepository utilisateurRepo;
-    @Autowired
+@Autowired
     private final CollecteRepository collecteRepo;
-    @Autowired
+@Autowired
     private final CollecteService collecteService;
     private final VergerService vergerService;
 
@@ -68,7 +68,7 @@ public class TourneeServiceImpl implements TourneeService {
         Utilisateur responsable = getCurrentUserEntity(currentUser);
 
         if (verger.getResponsable() == null ||
-                !verger.getResponsable().getId().equals(responsable.getId())) {
+            !verger.getResponsable().getId().equals(responsable.getId())) {
             throw new SecurityException("Vous n'avez pas accès à ce verger");
         }
     }
@@ -97,7 +97,7 @@ public class TourneeServiceImpl implements TourneeService {
         }
 
         if (verger.getResponsable() == null ||
-                !verger.getResponsable().getId().equals(currentUserEntity.getId())) {
+            !verger.getResponsable().getId().equals(currentUserEntity.getId())) {
             throw new SecurityException("Vous n'avez pas accès à cette tournée");
         }
     }
@@ -110,8 +110,8 @@ public class TourneeServiceImpl implements TourneeService {
         Utilisateur responsable = getCurrentUserEntity(currentUser);
         return tournees.stream()
                 .filter(t -> t.getVerger() != null &&
-                        t.getVerger().getResponsable() != null &&
-                        t.getVerger().getResponsable().getId().equals(responsable.getId()))
+                             t.getVerger().getResponsable() != null &&
+                             t.getVerger().getResponsable().getId().equals(responsable.getId()))
                 .collect(Collectors.toList());
     }
 
@@ -234,14 +234,36 @@ public class TourneeServiceImpl implements TourneeService {
         return findOrThrow(id);
     }
 
+    // TourneeServiceImpl.java - Use regular findAll()
     @Override
     public List<TourneeResponse> getAll(UserDetails currentUser) {
-        List<Tournee> tournees = tourneeRepo.findAll();
-        return filterByResponsable(tournees, currentUser).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-    }
+        long start = System.currentTimeMillis();
 
+        // Use regular findAll() instead of findAllLight()
+        List<Tournee> tournees = tourneeRepo.findAll();
+        System.out.println("📊 DB query took: " + (System.currentTimeMillis() - start) + "ms - Found " + tournees.size() + " records");
+
+        long mapStart = System.currentTimeMillis();
+        // Use a very simple mapping that doesn't access nested objects
+        List<TourneeResponse> result = tournees.stream()
+                .map(t -> TourneeResponse.builder()
+                        .id(t.getId())
+                        .code(t.getCode())
+                        .statut(t.getStatut())
+                        .dateDebut(t.getDateDebut())
+                        .dateFin(t.getDateFin())
+                        .dateCreation(t.getDateCreation())
+                        .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
+                        .distanceTotale(t.getDistanceTotale())
+                        .observations(t.getObservations())
+                        .livraisonDestinationNom(t.getLivraisonDestinationNom())
+                        .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                        .build())
+                .collect(Collectors.toList());
+        System.out.println("🔄 Mapping took: " + (System.currentTimeMillis() - mapStart) + "ms");
+
+        return result;
+    }
     @Override
     public List<TourneeResponse> getByVerger(String vergerId, UserDetails currentUser) {
         checkResponsableAccess(vergerId, currentUser);
@@ -611,8 +633,8 @@ public class TourneeServiceImpl implements TourneeService {
 
         if (nbreArbre > arbresRestants) {
             throw new IllegalStateException(
-                    String.format("Impossible de récolter %d arbres. Il reste seulement %d arbres disponibles (total: %d, déjà planifiés: %d).",
-                            nbreArbre, arbresRestants, verger.getNbArbre(), arbresDejaPlanifies)
+                String.format("Impossible de récolter %d arbres. Il reste seulement %d arbres disponibles (total: %d, déjà planifiés: %d).",
+                    nbreArbre, arbresRestants, verger.getNbArbre(), arbresDejaPlanifies)
             );
         }
     }
@@ -633,7 +655,7 @@ public class TourneeServiceImpl implements TourneeService {
 
     @Autowired
     private UtilisateurRepository userRep;
-    @Override
+@Override
     public Optional<List<Utilisateur>> getAllTravailleurs() {
         List<Utilisateur> travailleurs = userRep.findByRoleAndEstSupprimeFalse("TRAVAILLEUR");
         return Optional.ofNullable(travailleurs);

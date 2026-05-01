@@ -8,6 +8,7 @@ import com.example.demo.model.Utilisateur;
 import com.example.demo.service.TourneeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,7 +24,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @CrossOrigin(origins = "http://localhost:4200")
 public class TourneeController {
-
+@Autowired
     private final TourneeService tourneeService;
 
     // ─── CREATE ────────────────────────────────────────────────────────────
