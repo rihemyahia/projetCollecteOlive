@@ -34,26 +34,23 @@ public class AdminTransporteurController {
     private TourneeRepository tourneeRepository;
 
     @GetMapping("/tournees-disponibles")
-public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "20") int size
-) {
-    Pageable pageable = PageRequest.of(page, size, Sort.by("dateDebut").ascending());
-    
-    // Include both PLANIFIEE and TERMINEE so admin can assign transporteurs after harvest
-    Page<Tournee> disponibles = tourneeRepository.findByStatutInAndTransporteurIsNull(
-        java.util.Arrays.asList(StatutTournee.PLANIFIEE, StatutTournee.EN_COURS, StatutTournee.TERMINEE),
-            pageable
-    );
-    
-    Map<String, Object> response = new HashMap<>();
-    response.put("content", disponibles.getContent());
-    response.put("totalPages", disponibles.getTotalPages());
-    response.put("totalElements", disponibles.getTotalElements());
-    response.put("currentPage", disponibles.getNumber());
-    
-    return ResponseEntity.ok(response);
-}
+    public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("dateDebut").ascending());
+
+        // Include both PLANIFIEE and TERMINEE so admin can assign transporteurs after harvest
+        Page<Tournee> disponibles = tourneeRepository.findByStatutInAndTransporteurIsNull(
+                pageable
+        );
+
+        response.put("content", disponibles.getContent());
+        response.put("totalElements", disponibles.getTotalElements());
+        response.put("currentPage", disponibles.getNumber());
+
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/{id}/tournees")
     public ResponseEntity<Map<String, Object>> getTourneesAssignees(@PathVariable String id) {
         Utilisateur transporteur = utilisateurRepository.findById(id)
