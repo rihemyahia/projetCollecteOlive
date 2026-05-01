@@ -704,6 +704,68 @@ public class TourneeServiceImpl implements TourneeService {
     
     // ========== RESPONSE MAPPING ==========
     
+    @Override
+    public TourneeResponse toResponseForTransporteurAssignList(Tournee t) {
+        if (t == null) {
+            return null;
+        }
+        Verger v = t.getVerger();
+        String vergerTypeOlive = null, vergerAgriculteurNom = null;
+        Double vergerSuperficie = null;
+        if (v != null) {
+            vergerTypeOlive = v.getTypeOlive();
+            vergerSuperficie = v.getSuperficie();
+            if (v.getAgriculteur() != null) {
+                vergerAgriculteurNom = v.getAgriculteur().getPrenom() + " " + v.getAgriculteur().getNom();
+            }
+        }
+        Ressource benne = t.getBenne();
+        Ressource tracteur = t.getTracteur();
+        return TourneeResponse.builder()
+                .id(t.getId())
+                .code(t.getCode())
+                .statut(t.getStatut())
+                .vergerId(v != null ? v.getId() : null)
+                .vergerTypeOlive(vergerTypeOlive)
+                .vergerAgriculteurNom(vergerAgriculteurNom)
+                .vergerSuperficie(vergerSuperficie)
+                .benneId(benne != null ? benne.getId() : null)
+                .benneNom(benne != null ? benne.getNom() : null)
+                .benneCapaciteKg(benne != null ? benne.getCapaciteKg() : null)
+                .tracteurId(tracteur != null ? tracteur.getId() : null)
+                .tracteurNom(tracteur != null ? tracteur.getNom() : null)
+                .tracteurImmatriculation(tracteur != null ? tracteur.getImmatriculation() : null)
+                .travailleurIds(java.util.Collections.emptyList())
+                .travailleurNoms(java.util.Collections.emptyList())
+                .nbreArbre(t.getNbreArbre())
+                .distanceTotale(t.getDistanceTotale())
+                .tempsTotal(t.getTempsTotal())
+                .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
+                .collecteFinalisee(t.getCollecteFinalisee())
+                .efficacite(null)
+                .observations(t.getObservations())
+                .livraisonDestinationNom(t.getLivraisonDestinationNom())
+                .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                .livraisonEstimeDebut(t.getLivraisonEstimeDebut())
+                .livraisonEstimeFin(t.getLivraisonEstimeFin())
+                .livraisonNotes(t.getLivraisonNotes())
+                .responsablePressoirId(t.getResponsablePressoirId())
+                .responsablePressoirNom(null)
+                .pressoirNom(null)
+                .pressoirAdresse(null)
+                .livraisonStartedAt(t.getLivraisonStartedAt())
+                .livraisonCompletedAt(t.getLivraisonCompletedAt())
+                .livraisonEvidenceName(t.getLivraisonEvidenceName())
+                .livraisonEvidenceUrl(t.getLivraisonEvidenceUrl())
+                .dateDebut(t.getDateDebut())
+                .dateFin(t.getDateFin())
+                .dateCreation(t.getDateCreation())
+                .totalCollecteVergerKg(null)
+                .collecteId(null)
+                .collecteCode(null)
+                .build();
+    }
+
     private TourneeResponse toResponse(Tournee t) {
         Verger v = t.getVerger();
         String vergerTypeOlive = null, vergerAgriculteurNom = null;

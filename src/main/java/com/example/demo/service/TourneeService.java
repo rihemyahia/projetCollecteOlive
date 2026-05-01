@@ -41,4 +41,10 @@ public interface TourneeService {
 
 	Optional<List<Utilisateur>> getAllTravailleurs();
 
+	/**
+	 * DTO léger pour listes admin (assignation transporteur) : évite de sérialiser
+	 * tout le graphe Mongo {@link Tournee} (travailleurs, collecte agrégée, etc.).
+	 */
+	TourneeResponse toResponseForTransporteurAssignList(Tournee t);
+
 }

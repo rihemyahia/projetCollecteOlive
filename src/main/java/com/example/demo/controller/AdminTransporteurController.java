@@ -1,11 +1,13 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.TourneeResponse;
 import com.example.demo.model.Role;
 import com.example.demo.model.StatutTournee;
 import com.example.demo.model.Tournee;
 import com.example.demo.model.Utilisateur;
 import com.example.demo.repository.TourneeRepository;
 import com.example.demo.repository.UtilisateurRepository;
+import com.example.demo.service.TourneeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -34,14 +36,17 @@ public class AdminTransporteurController {
     @Autowired
     private TourneeRepository tourneeRepository;
 
+    @Autowired
+    private TourneeService tourneeService;
+
     @GetMapping("/tournees-disponibles")
 public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "20") int size
+        @RequestParam(defaultValue = "100") int size
 ) {
     System.out.println("[DEBUG] GET /api/admin/transporteurs/tournees-disponibles page=" + page + " size=" + size);
-    
-    Pageable pageable = PageRequest.of(page, size, Sort.by("dateDebut").ascending());
+    // Plus récent en premier : évite que la 1re page soit remplie uniquement de vieilles TERMINEE sans transporteur.
+    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateDebut"));
 
     // Compute allowed assignable statuses dynamically: everything except
     // EN_LIVRAISON, LIVREE, ANNULEE. This keeps frontend and backend in sync
@@ -63,8 +68,12 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         }
     }
 
+    List<TourneeResponse> contentLight = disponibles.getContent().stream()
+            .map(tourneeService::toResponseForTransporteurAssignList)
+            .collect(Collectors.toList());
+
     Map<String, Object> response = new HashMap<>();
-    response.put("content", disponibles.getContent());
+    response.put("content", contentLight);
     response.put("totalPages", disponibles.getTotalPages());
     response.put("totalElements", disponibles.getTotalElements());
     response.put("currentPage", disponibles.getNumber());
@@ -98,9 +107,13 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
 
         System.out.println("[DEBUG] Filtered from " + assignees.size() + " to " + forPanel.size() + " tournees (panel)");
 
+        List<TourneeResponse> tourneesLight = forPanel.stream()
+                .map(tourneeService::toResponseForTransporteurAssignList)
+                .collect(Collectors.toList());
+
         Map<String, Object> response = new HashMap<>();
         response.put("transporteur", transporteur);
-        response.put("tournees", forPanel);
+        response.put("tournees", tourneesLight);
         return ResponseEntity.ok(response);
     }
 

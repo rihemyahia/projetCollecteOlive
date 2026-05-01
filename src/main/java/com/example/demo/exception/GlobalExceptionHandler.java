@@ -1,5 +1,6 @@
 package com.example.demo.exception;
 
+import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -36,6 +37,15 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(body);
     }
+    /**
+     * Le navigateur a fermé la socket pendant l’écriture (réponse trop lente ou navigation).
+     * Inutile de renvoyer un corps JSON ni de logger en erreur applicative.
+     */
+    @ExceptionHandler(ClientAbortException.class)
+    public ResponseEntity<Void> handleClientAbort(ClientAbortException ex) {
+        return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).build();
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
         Map<String, Object> error = new HashMap<>();
