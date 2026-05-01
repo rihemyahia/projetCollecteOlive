@@ -357,25 +357,33 @@ public class TourneeServiceImpl implements TourneeService {
         checkTourneeAccess(tournee, currentUser);
         return annulerInterne(id);
     }
-    
     private TourneeResponse annulerInterne(String id) {
         Tournee tournee = findOrThrow(id);
-        if (tournee.getStatut() == StatutTournee.TERMINEE)
-            throw new IllegalStateException("Une tournée TERMINÉE ne peut pas être annulée.");
-        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON)
-            throw new IllegalStateException("Une tournée EN LIVRAISON ne peut pas être annulée.");
-        if (tournee.getStatut() == StatutTournee.LIVREE)
-            throw new IllegalStateException("Une tournée LIVRÉE ne peut pas être annulée.");
 
+        // Cannot cancel tournées that are already finished or in delivery
+        if (tournee.getStatut() == StatutTournee.TERMINEE) {
+            throw new IllegalStateException("Une tournée TERMINÉE ne peut pas être annulée.");
+        }
+        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON) {
+            throw new IllegalStateException("Une tournée EN LIVRAISON ne peut pas être annulée.");
+        }
+        if (tournee.getStatut() == StatutTournee.LIVREE) {
+            throw new IllegalStateException("Une tournée LIVRÉE ne peut pas être annulée.");
+        }
+
+        // Set status to cancelled
         tournee.setStatut(StatutTournee.ANNULEE);
         tournee.setCollecteFinalisee(false);
+
         Tournee saved = tourneeRepo.save(tournee);
+
+        // Recompute verger status for the associated verger
         if (saved.getVerger() != null && saved.getVerger().getId() != null) {
             vergerService.recomputeStatutForVerger(saved.getVerger().getId());
         }
+
         return toResponse(saved);
     }
-    
     // ========== UPDATE / DELETE ==========
     
     @Override
@@ -384,44 +392,102 @@ public class TourneeServiceImpl implements TourneeService {
         checkTourneeAccess(tournee, currentUser);
         return mettreAJourInterne(id, req, currentUser);
     }
-    
+
     private TourneeResponse mettreAJourInterne(String id, TourneeRequest req, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
-        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON || tournee.getStatut() == StatutTournee.LIVREE) {
-            throw new IllegalStateException("Destination en lecture seule pendant/après la livraison.");
-        }
-        if (tournee.getStatut() == StatutTournee.EN_COURS) {
-            // During harvest, only privileged late destination update is allowed.
-            if (!isAdmin(currentUser)) {
-                throw new IllegalStateException("En cours: seule une mise à jour destination par ADMIN est autorisée.");
-            }
-            boolean destinationProvided = req.getLivraisonDestinationNom() != null || req.getLivraisonDestinationAdresse() != null;
-            if (!destinationProvided) {
-                throw new IllegalStateException("En cours: seules les informations de destination peuvent être modifiées.");
-            }
-            if (req.getLivraisonDestinationNom() != null) tournee.setLivraisonDestinationNom(req.getLivraisonDestinationNom());
-            if (req.getLivraisonDestinationAdresse() != null) tournee.setLivraisonDestinationAdresse(req.getLivraisonDestinationAdresse());
-            return toResponse(tourneeRepo.save(tournee));
-        }
-        if (tournee.getStatut() != StatutTournee.PLANIFIEE)
-            throw new IllegalStateException("Seule une tournée PLANIFIÉE peut être modifiée.");
 
+        // ========== STATUS CHECKS ==========
+        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON || tournee.getStatut() == StatutTournee.LIVREE) {
+            throw new IllegalStateException("Cette tournée ne peut pas être modifiée car elle est en livraison ou déjà livrée.");
+        }
+
+        if (tournee.getStatut() != StatutTournee.PLANIFIEE) {
+            throw new IllegalStateException("Seule une tournée PLANIFIÉE peut être modifiée.");
+        }
+
+        // ========== DATE VALIDATION ==========
         Date newDebut = req.getDateDebut() != null ? req.getDateDebut() : tournee.getDateDebut();
         Date newFin = req.getDateFin() != null ? req.getDateFin() : tournee.getDateFin();
 
         validateDates(newDebut, newFin);
 
+        // ========== CHECK IF DATES HAVE CHANGED ==========
+        boolean datesChanged = !newDebut.equals(tournee.getDateDebut()) || !newFin.equals(tournee.getDateFin());
+
+        if (datesChanged) {
+            if (tournee.getBenne() != null) {
+                checkBenneDisponible(tournee.getBenne(), newDebut, newFin, id);
+            }
+            if (tournee.getTracteur() != null) {
+                checkTracteurDisponible(tournee.getTracteur(), newDebut, newFin, id);
+            }
+            if (tournee.getTravailleurs() != null && !tournee.getTravailleurs().isEmpty()) {
+                for (Utilisateur travailleur : tournee.getTravailleurs()) {
+                    checkTravailleurDisponible(travailleur, newDebut, newFin, id);
+                }
+            }
+        }
+
+        // ========== UPDATE FIELDS ==========
         tournee.setDateDebut(newDebut);
         tournee.setDateFin(newFin);
-        if (req.getNbreArbre() != null && req.getNbreArbre() > 0) tournee.setNbreArbre(req.getNbreArbre());
-        if (req.getDistanceTotale() != null) tournee.setDistanceTotale(req.getDistanceTotale());
-        if (req.getObservations() != null) tournee.setObservations(req.getObservations());
-        if (req.getLivraisonDestinationNom() != null) tournee.setLivraisonDestinationNom(req.getLivraisonDestinationNom());
-        if (req.getLivraisonDestinationAdresse() != null) tournee.setLivraisonDestinationAdresse(req.getLivraisonDestinationAdresse());
 
-        return toResponse(tourneeRepo.save(tournee));
+        if (req.getNbreArbre() != null && req.getNbreArbre() > 0) {
+            if (!req.getNbreArbre().equals(tournee.getNbreArbre())) {
+                verifierArbresRestants(tournee.getVerger(), req.getNbreArbre());
+            }
+            tournee.setNbreArbre(req.getNbreArbre());
+        }
+
+        if (req.getDistanceTotale() != null) {
+            tournee.setDistanceTotale(req.getDistanceTotale());
+        }
+
+        if (req.getObservations() != null) {
+            tournee.setObservations(req.getObservations());
+        }
+
+        // Check if resources changed
+        if (req.getBenneId() != null && !req.getBenneId().equals(tournee.getBenne().getId())) {
+            Ressource newBenne = ressourceRepo.findById(req.getBenneId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Benne introuvable : " + req.getBenneId()));
+            if (newBenne.getType() != TypeRessource.BENNE) {
+                throw new IllegalArgumentException(req.getBenneId() + " n'est pas une benne.");
+            }
+            checkBenneDisponible(newBenne, newDebut, newFin, id);
+            tournee.setBenne(newBenne);
+        }
+
+        if (req.getTracteurId() != null && !req.getTracteurId().equals(tournee.getTracteur().getId())) {
+            Ressource newTracteur = ressourceRepo.findById(req.getTracteurId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Tracteur introuvable : " + req.getTracteurId()));
+            if (newTracteur.getType() != TypeRessource.TRACTEUR) {
+                throw new IllegalArgumentException(req.getTracteurId() + " n'est pas un tracteur.");
+            }
+            checkTracteurDisponible(newTracteur, newDebut, newFin, id);
+            tournee.setTracteur(newTracteur);
+        }
+
+        if (req.getTravailleurIds() != null && !req.getTravailleurIds().isEmpty()) {
+            List<Utilisateur> newTravailleurs = new ArrayList<>();
+            for (String tid : req.getTravailleurIds()) {
+                Utilisateur t = utilisateurRepo.findById(tid)
+                        .orElseThrow(() -> new ResourceNotFoundException("Travailleur introuvable : " + tid));
+                checkTravailleurDisponible(t, newDebut, newFin, id);
+                newTravailleurs.add(t);
+            }
+            tournee.setTravailleurs(newTravailleurs);
+        }
+
+        Tournee saved = tourneeRepo.save(tournee);
+
+        // Recompute verger status if needed
+        if (saved.getVerger() != null && saved.getVerger().getId() != null) {
+            vergerService.recomputeStatutForVerger(saved.getVerger().getId());
+        }
+
+        return toResponse(saved);
     }
-
     @Override
     public void supprimer(String id, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
@@ -469,20 +535,6 @@ public class TourneeServiceImpl implements TourneeService {
     // ========== AVAILABILITY CHECKS (CONSERVÉES INTACTES) ==========
 
     private void checkBenneDisponible(Ressource benne, Date debut, Date fin, String excludeId) {
-        // ✅ ADD THIS: Check resource status first
-        if (!"DISPONIBLE".equals(benne.getStatut())) {
-            throw new IllegalStateException(
-                    "La benne « " + benne.getNom() + " » n'est pas disponible. Statut actuel: " + benne.getStatut()
-            );
-        }
-
-        // Check if benne is physically full
-        if (benne.getEstPleine() != null && benne.getEstPleine()) {
-            throw new IllegalStateException(
-                    "La benne « " + benne.getNom() + " » est pleine. Veuillez la vider avant de l'utiliser."
-            );
-        }
-
         List<Tournee> conflicts = tourneeRepo.findConflictsByBenne(benne.getId(), debut, fin, excludeId);
         System.out.println("🔍 Checking benne conflicts: " + benne.getNom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
@@ -493,13 +545,6 @@ public class TourneeServiceImpl implements TourneeService {
     }
 
     private void checkTracteurDisponible(Ressource tracteur, Date debut, Date fin, String excludeId) {
-        // ✅ ADD THIS: Check resource status first
-        if (!"DISPONIBLE".equals(tracteur.getStatut())) {
-            throw new IllegalStateException(
-                    "Le tracteur « " + tracteur.getNom() + " » n'est pas disponible. Statut actuel: " + tracteur.getStatut()
-            );
-        }
-
         List<Tournee> conflicts = tourneeRepo.findConflictsByTracteur(tracteur.getId(), debut, fin, excludeId);
         System.out.println("🔍 Checking tracteur conflicts: " + tracteur.getNom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
@@ -508,6 +553,7 @@ public class TourneeServiceImpl implements TourneeService {
                     + fmt(c.getDateDebut()) + " au " + fmt(c.getDateFin()) + " (tournée " + c.getCode() + ").");
         }
     }
+
     private void checkTravailleurDisponible(Utilisateur travailleur, Date debut, Date fin, String excludeId) {
         List<Tournee> conflicts = tourneeRepo.findConflictsByTravailleur(travailleur.getId(), debut, fin, excludeId);
         System.out.println("🔍 Checking travailleur conflicts: " + travailleur.getPrenom() + " - found: " + conflicts.size());

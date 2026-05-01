@@ -33,7 +33,6 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public AdminDashboardDTO getAdminDashboard() {
-        // ... (Keep your existing working Admin code exactly as it is)
         List<Verger> allVergers = vergerRepo.findByEstSupprimerFalse();
         List<Tournee> allTournees = tourneeRepo.findAll();
         List<AlerteTerrain> allAlertes = alerteRepo.findByEstSupprimerFalse();
@@ -80,7 +79,6 @@ public class DashboardServiceImpl implements DashboardService {
         Utilisateur responsable = utilisateurRepo.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Responsable introuvable"));
 
-        // 🔥 FIX: Convert String ID to ObjectId for MongoDB Query
         ObjectId responsableId = new ObjectId(responsable.getId());
         List<Verger> mesVergers = vergerRepo.findByResponsableIdAndEstSupprimerFalse(responsableId);
         List<String> vergerIds = mesVergers.stream().map(Verger::getId).collect(Collectors.toList());
@@ -103,22 +101,18 @@ public class DashboardServiceImpl implements DashboardService {
                 .mesVergersNonRecolte(mesVergers.stream().filter(v -> v.getStatut() == StatutVerger.NON_RECOLTE).count())
                 .mesVergersEnCours(mesVergers.stream().filter(v -> v.getStatut() == StatutVerger.EN_COURS).count())
                 .mesVergersRecolte(mesVergers.stream().filter(v -> v.getStatut() == StatutVerger.RECOLTE).count())
-
                 .totalMesTournees(mesTournees.size())
                 .mesTourneesEnCours(mesTournees.stream().filter(t -> t.getStatut() == StatutTournee.EN_COURS).count())
                 .mesTourneesTerminees(mesTournees.stream().filter(t -> t.getStatut() == StatutTournee.TERMINEE).count())
                 .mesTourneesPlanifiees(mesTournees.stream().filter(t -> t.getStatut() == StatutTournee.PLANIFIEE).count())
-
                 .totalMesAlertes(mesAlertes.size())
                 .mesAlertesEnAttente(mesAlertes.stream().filter(a -> a.getStatut() == StatutAlerte.EN_ATTENTE).count())
                 .mesAlertesEnCours(mesAlertes.stream().filter(a -> a.getStatut() == StatutAlerte.EN_COURS).count())
                 .mesAlertesCritiques(mesAlertes.stream().filter(a -> a.getNiveauUrgence() == NiveauUrgence.CRITIQUE).count())
-
                 .mesQuantiteTotaleKg(mesQuantiteKg)
                 .totalTravailleurs(utilisateurRepo.countByRole(Role.TRAVAILLEUR))
                 .bennesDisponibles(ressourceRepo.findBennesByStatut("DISPONIBLE").size())
                 .tracteursDisponibles(ressourceRepo.findTracteursByStatut("DISPONIBLE").size())
-
                 .mesVergers(buildVergerDetail(mesVergers))
                 .build();
     }
@@ -128,10 +122,8 @@ public class DashboardServiceImpl implements DashboardService {
         Utilisateur agriculteur = utilisateurRepo.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Agriculteur introuvable"));
 
-        // 🔥 FIX: Convert String ID to ObjectId for MongoDB Query
         ObjectId agriculteurId = new ObjectId(agriculteur.getId());
 
-        // Ensure this method exists in repository
         List<Verger> mesVergers = vergerRepo.findActiveByAgriculteurId(agriculteurId);
         List<String> vergerIds = mesVergers.stream().map(Verger::getId).collect(Collectors.toList());
 
@@ -139,8 +131,8 @@ public class DashboardServiceImpl implements DashboardService {
                 .filter(t -> t.getVerger() != null && vergerIds.contains(t.getVerger().getId()))
                 .collect(Collectors.toList());
 
-        List<AlerteTerrain> mesAlertes = alerteRepo.findByAgriculteurId(agriculteurId).stream()
-                .filter(a -> !Boolean.TRUE.equals(a.getEstSupprimer()))
+        List<AlerteTerrain> mesAlertes = alerteRepo.findByEstSupprimerFalse().stream()
+                .filter(a -> a.getVerger() != null && vergerIds.contains(a.getVerger().getId()))
                 .collect(Collectors.toList());
 
         List<Collecte> mesCollectes = collecteRepo.findAll().stream()
@@ -156,24 +148,20 @@ public class DashboardServiceImpl implements DashboardService {
                 .mesVergersNonRecolte(mesVergers.stream().filter(v -> v.getStatut() == StatutVerger.NON_RECOLTE).count())
                 .mesVergersEnCours(mesVergers.stream().filter(v -> v.getStatut() == StatutVerger.EN_COURS).count())
                 .mesVergersRecolte(mesVergers.stream().filter(v -> v.getStatut() == StatutVerger.RECOLTE).count())
-
                 .totalMesCollectes(mesCollectes.size())
+                .mesCollectesEnCours(mesCollectes.stream().filter(c -> c.getStatut() == StatutCollecte.EN_COURS).count())
+                .mesCollectesTerminees(mesCollectes.stream().filter(c -> c.getStatut() == StatutCollecte.TERMINEE).count())
                 .mesQuantiteTotaleKg(mesQuantiteKg)
-
                 .mesTourneesPlanifiees(mesTournees.stream().filter(t -> t.getStatut() == StatutTournee.PLANIFIEE).count())
                 .mesTourneesEnCours(mesTournees.stream().filter(t -> t.getStatut() == StatutTournee.EN_COURS).count())
                 .mesTourneesTerminees(mesTournees.stream().filter(t -> t.getStatut() == StatutTournee.TERMINEE).count())
-
                 .totalMesAlertes(mesAlertes.size())
                 .mesAlertesEnAttente(mesAlertes.stream().filter(a -> a.getStatut() == StatutAlerte.EN_ATTENTE).count())
                 .mesAlertesEnCours(mesAlertes.stream().filter(a -> a.getStatut() == StatutAlerte.EN_COURS).count())
                 .mesAlertesTraitees(mesAlertes.stream().filter(a -> a.getStatut() == StatutAlerte.TRAITEE).count())
-
                 .mesVergers(buildMonVergerDTO(mesVergers))
                 .build();
     }
-
-    // ── Fixed Helper Methods ────────
 
     private List<AdminDashboardDTO.VergerStatsDTO> buildTopVergersAdmin(List<Verger> vergers) {
         return vergers.stream()
@@ -212,17 +200,60 @@ public class DashboardServiceImpl implements DashboardService {
         }).collect(Collectors.toList());
     }
 
+    // 🔥 FIXED: Version for primitive types (int, double) - no null checking needed
     private List<AgriculteurDashboardDTO.MonVergerDTO> buildMonVergerDTO(List<Verger> vergers) {
         return vergers.stream().map(v -> {
-            String respNom = v.getResponsable() != null ? v.getResponsable().getPrenom() + " " + v.getResponsable().getNom() : "—";
+            String respNom = "—";
+            String respEmail = "—";
+            if (v.getResponsable() != null) {
+                respNom = v.getResponsable().getPrenom() + " " + v.getResponsable().getNom();
+                respEmail = v.getResponsable().getEmail() != null ? v.getResponsable().getEmail() : "—";
+            }
+
+            int nbTournees = 0;
+            try {
+                nbTournees = tourneeRepo.findByVergerId(v.getId()).size();
+            } catch (Exception e) {
+                nbTournees = 0;
+            }
+
+            long nbAlertes = 0;
+            try {
+                nbAlertes = alerteRepo.findByEstSupprimerFalse().stream()
+                        .filter(a -> a.getVerger() != null && a.getVerger().getId().equals(v.getId()))
+                        .count();
+            } catch (Exception e) {
+                nbAlertes = 0;
+            }
+
+            double quantiteRecolteKg = 0.0;
+            try {
+                quantiteRecolteKg = collecteRepo.findByVergerIdOrderByAnneeDescNumeroDesc(v.getId()).stream()
+                        .mapToDouble(c -> c.getQuantiteTotaleKg() != null ? c.getQuantiteTotaleKg() : 0.0)
+                        .sum();
+            } catch (Exception e) {
+                quantiteRecolteKg = 0.0;
+            }
+
+            // For primitive types (int, double), they cannot be null
+            // So just use the value directly - it will be 0 if not set
+            int nbArbre = v.getNbArbre();
+            double superficie = v.getSuperficie();
+            int maturiteActuelle = v.getMaturiteActuelle();
+
             return AgriculteurDashboardDTO.MonVergerDTO.builder()
                     .vergerId(v.getId())
-                    .typeOlive(v.getTypeOlive())
+                    .typeOlive(v.getTypeOlive() != null ? v.getTypeOlive() : "Inconnu")
                     .responsableNom(respNom)
+                    .responsableEmail(respEmail)
                     .statut(v.getStatut() != null ? v.getStatut().name() : "—")
-                    .phaseCulturale(derivePhaseName(v.getMaturiteActuelle()))
-                    .quantiteRecolteKg(collecteRepo.findByVergerIdOrderByAnneeDescNumeroDesc(v.getId()).stream()
-                            .mapToDouble(c -> c.getQuantiteTotaleKg() != null ? c.getQuantiteTotaleKg() : 0.0).sum())
+                    .nbArbre(nbArbre)
+                    .superficie(superficie)
+                    .maturiteActuelle(maturiteActuelle)
+                    .quantiteRecolteKg(quantiteRecolteKg)
+                    .nbTournees(nbTournees)
+                    .nbAlertes(nbAlertes)
+                    .phaseCulturale(derivePhaseName(maturiteActuelle))
                     .build();
         }).collect(Collectors.toList());
     }
