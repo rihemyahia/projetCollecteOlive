@@ -1,17 +1,14 @@
 package com.example.demo.model;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import lombok.Data;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.AllArgsConstructor;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.DBRef;
-import java.util.ArrayList;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.util.Date;
 import java.util.List;
 
@@ -19,12 +16,13 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Document(collection = "utilisateur")
 public class Utilisateur {
 
     @Id
     private String id;
 
-    @Indexed(unique = true)
+    @Indexed(unique = true, sparse = true)
     private String email;
 
     private String motDePasse;
@@ -42,7 +40,7 @@ public class Utilisateur {
     private Boolean estActif;
 
     private Date dateCreation;
-    private boolean compteActif;  // Note: changed from 'ACompte' to 'aCompte' pour convention Java
+    private boolean compteActif;
 
     // ========== ATTRIBUTS POUR ROLE: ADMIN ==========
 
@@ -53,7 +51,9 @@ public class Utilisateur {
     // ========== ATTRIBUTS POUR ROLE: AGRICULTEUR ==========
     private String nomExploitation;
     private List<Verger> vergers;
-    @Indexed(unique = true)    // ========== ATTRIBUTS POUR ROLE: EQUIPE_RECOLTE ==========
+
+    // ========== ATTRIBUTS POUR ROLE: TRAVAILLEUR (EQUIPE_RECOLTE) ==========
+    @Indexed(unique = true, sparse = true)  // ← This allows multiple nulls
     private String cin;
     private List<String> specialites;
     private List<Collecte> collectesAssignees;
@@ -68,10 +68,15 @@ public class Utilisateur {
     private Boolean disponibleTransport;
     private Date dateObtentionPermis;
     private Integer anneesExperience;
-    // Utilisateur.java - The "back" part (gets serialized with reference ID only)
+
     @JsonBackReference
     private List<Tournee> tourneesAssignees;
     private Double tarifKm;
-   private boolean estSupprime;
+    private boolean estSupprime;
 
+    // ========== ATTRIBUTS POUR ROLE: RESPONSABLE_PRESSOIR ==========
+    // Embedded Pressoir - directly inside Utilisateur (no @DBRef)
+    private Pressoir pressoir;
+    private Boolean disponible;
+    private Date dateAffectation;
 }

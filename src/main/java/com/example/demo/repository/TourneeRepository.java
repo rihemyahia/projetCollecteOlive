@@ -36,7 +36,7 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     // ✅ FIXED CONFLICT QUERY FOR BENNE
     @Query("{ " +
             "  'benne.id': ?0, " +
-            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS','TERMINEE'] }, " +
+            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS'] }, " +
             "  '_id': { $ne: ?3 }, " +
             "  $or: [ " +
             "    { $and: [ { 'dateDebut': { $lt: ?2 } }, { 'dateFin': { $gt: ?1 } } ] }, " +

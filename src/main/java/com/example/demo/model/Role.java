@@ -8,5 +8,5 @@ public enum Role {
     TRAVAILLEUR,
     TRANSPORTEUR,
 
-    
+    RESPONSABLE_PRESSOIR,
 }

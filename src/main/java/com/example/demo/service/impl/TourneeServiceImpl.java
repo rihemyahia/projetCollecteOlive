@@ -75,7 +75,7 @@ public class TourneeServiceImpl implements TourneeService {
             throw new SecurityException("Vous n'avez pas accès à ce verger");
         }
     }
-    
+
     private void checkTourneeAccess(Tournee tournee, UserDetails currentUser) {
         if (isAdmin(currentUser)) {
             return; // Admin a accès à tout
@@ -467,8 +467,22 @@ public class TourneeServiceImpl implements TourneeService {
     }
 
     // ========== AVAILABILITY CHECKS (CONSERVÉES INTACTES) ==========
-    
+
     private void checkBenneDisponible(Ressource benne, Date debut, Date fin, String excludeId) {
+        // ✅ ADD THIS: Check resource status first
+        if (!"DISPONIBLE".equals(benne.getStatut())) {
+            throw new IllegalStateException(
+                    "La benne « " + benne.getNom() + " » n'est pas disponible. Statut actuel: " + benne.getStatut()
+            );
+        }
+
+        // Check if benne is physically full
+        if (benne.getEstPleine() != null && benne.getEstPleine()) {
+            throw new IllegalStateException(
+                    "La benne « " + benne.getNom() + " » est pleine. Veuillez la vider avant de l'utiliser."
+            );
+        }
+
         List<Tournee> conflicts = tourneeRepo.findConflictsByBenne(benne.getId(), debut, fin, excludeId);
         System.out.println("🔍 Checking benne conflicts: " + benne.getNom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
@@ -479,6 +493,13 @@ public class TourneeServiceImpl implements TourneeService {
     }
 
     private void checkTracteurDisponible(Ressource tracteur, Date debut, Date fin, String excludeId) {
+        // ✅ ADD THIS: Check resource status first
+        if (!"DISPONIBLE".equals(tracteur.getStatut())) {
+            throw new IllegalStateException(
+                    "Le tracteur « " + tracteur.getNom() + " » n'est pas disponible. Statut actuel: " + tracteur.getStatut()
+            );
+        }
+
         List<Tournee> conflicts = tourneeRepo.findConflictsByTracteur(tracteur.getId(), debut, fin, excludeId);
         System.out.println("🔍 Checking tracteur conflicts: " + tracteur.getNom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
@@ -487,7 +508,6 @@ public class TourneeServiceImpl implements TourneeService {
                     + fmt(c.getDateDebut()) + " au " + fmt(c.getDateFin()) + " (tournée " + c.getCode() + ").");
         }
     }
-
     private void checkTravailleurDisponible(Utilisateur travailleur, Date debut, Date fin, String excludeId) {
         List<Tournee> conflicts = tourneeRepo.findConflictsByTravailleur(travailleur.getId(), debut, fin, excludeId);
         System.out.println("🔍 Checking travailleur conflicts: " + travailleur.getPrenom() + " - found: " + conflicts.size());

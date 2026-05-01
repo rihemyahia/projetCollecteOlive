@@ -247,6 +247,30 @@ public class AuthServiceImpl implements com.example.demo.service.AuthService{
                     throw new RuntimeException("Le statut de l'employé est requis");
                 }
                 break;
+            case RESPONSABLE_PRESSOIR:
+                // ✅ Validate embedded pressoir
+                if (utilisateur.getPressoir() == null) {
+                    throw new RuntimeException("Le pressoir est requis pour un responsable de pressoir");
+                }
+                if (utilisateur.getPressoir().getNom() == null || utilisateur.getPressoir().getNom().trim().isEmpty()) {
+                    throw new RuntimeException("Le nom du pressoir est requis");
+                }
+                if (utilisateur.getPressoir().getAdresse() == null || utilisateur.getPressoir().getAdresse().trim().isEmpty()) {
+                    throw new RuntimeException("L'adresse du pressoir est requise");
+                }
+                if (utilisateur.getDateAffectation() == null) {
+                    utilisateur.setDateAffectation(new Date());
+                }
+                if (utilisateur.getDisponible() == null) {
+                    utilisateur.setDisponible(true);
+                }
+                if (utilisateur.getPressoir().getDateCreation() == null) {
+                    utilisateur.getPressoir().setDateCreation(new Date());
+                }
+                if (utilisateur.getPressoir().getActif() == null) {
+                    utilisateur.getPressoir().setActif(true);
+                }
+                break;
             case TRANSPORTEUR:
                 if (utilisateur.getPermis() == null || utilisateur.getPermis().trim().isEmpty()) {
                     throw new RuntimeException("Le permis est requis pour un transporteur");
