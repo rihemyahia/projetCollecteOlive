@@ -48,6 +48,9 @@ public class TourneeResponse {
     private String observations;
     private String livraisonDestinationNom;
     private String livraisonDestinationAdresse;
+    private Date livraisonEstimeDebut;
+    private Date livraisonEstimeFin;
+    private String livraisonNotes;
     private Date livraisonStartedAt;
     private Date livraisonCompletedAt;
     private String livraisonEvidenceName;
