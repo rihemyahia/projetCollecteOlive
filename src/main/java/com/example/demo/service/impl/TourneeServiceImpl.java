@@ -91,6 +91,15 @@ public class TourneeServiceImpl implements TourneeService {
         }
         
         // Pour RESPONSABLE, vérifier qu'il est responsable du verger de la tournée
+        if (currentUserEntity.getRole() == Role.RESPONSABLE_PRESSOIR) {
+            if (tournee.getResponsablePressoir() != null
+                    && tournee.getResponsablePressoir().getId() != null
+                    && tournee.getResponsablePressoir().getId().equals(currentUserEntity.getId())) {
+                return;
+            }
+            throw new SecurityException("Vous n'avez pas acces a cette tournee");
+        }
+
         Verger verger = tournee.getVerger();
         if (verger == null) {
             throw new SecurityException("Verger non trouvé pour cette tournée");
@@ -171,6 +180,18 @@ public class TourneeServiceImpl implements TourneeService {
             System.out.println("✅ Travailleur disponible: " + t.getPrenom() + " " + t.getNom());
         }
 
+        Utilisateur responsablePressoir = resolveResponsablePressoir(req.getResponsablePressoirId());
+        String destinationNom = req.getLivraisonDestinationNom();
+        String destinationAdresse = req.getLivraisonDestinationAdresse();
+        if (responsablePressoir != null && responsablePressoir.getPressoir() != null) {
+            if (destinationNom == null || destinationNom.isBlank()) {
+                destinationNom = responsablePressoir.getPressoir().getNom();
+            }
+            if (destinationAdresse == null || destinationAdresse.isBlank()) {
+                destinationAdresse = responsablePressoir.getPressoir().getAdresse();
+            }
+        }
+
         int nbreArbre = (req.getNbreArbre() != null && req.getNbreArbre() > 0)
                 ? req.getNbreArbre() : Tournee.NB_ARBRES_PAR_TOURNEE;
 
@@ -195,13 +216,15 @@ public class TourneeServiceImpl implements TourneeService {
                 .benne(benne)
                 .tracteur(tracteur)
                 .travailleurs(travailleurs)
+                .responsablePressoir(responsablePressoir)
+                .responsablePressoirId(responsablePressoir != null ? responsablePressoir.getId() : null)
                 .nbreArbre(nbreArbre)
                 .dateDebut(dateDebut)
                 .dateFin(dateFin)
                 .distanceTotale(req.getDistanceTotale())
                 .observations(req.getObservations())
-                .livraisonDestinationNom(req.getLivraisonDestinationNom())
-                .livraisonDestinationAdresse(req.getLivraisonDestinationAdresse())
+                .livraisonDestinationNom(destinationNom)
+                .livraisonDestinationAdresse(destinationAdresse)
                 .collecteFinalisee(false)
                 .dateCreation(new Date())
                 .build();
@@ -443,6 +466,28 @@ public class TourneeServiceImpl implements TourneeService {
             tournee.setObservations(req.getObservations());
         }
 
+        if (req.getResponsablePressoirId() != null) {
+            Utilisateur responsablePressoir = resolveResponsablePressoir(req.getResponsablePressoirId());
+            tournee.setResponsablePressoir(responsablePressoir);
+            tournee.setResponsablePressoirId(responsablePressoir.getId());
+            if (responsablePressoir.getPressoir() != null) {
+                if (req.getLivraisonDestinationNom() == null || req.getLivraisonDestinationNom().isBlank()) {
+                    tournee.setLivraisonDestinationNom(responsablePressoir.getPressoir().getNom());
+                }
+                if (req.getLivraisonDestinationAdresse() == null || req.getLivraisonDestinationAdresse().isBlank()) {
+                    tournee.setLivraisonDestinationAdresse(responsablePressoir.getPressoir().getAdresse());
+                }
+            }
+        }
+
+        if (req.getLivraisonDestinationNom() != null) {
+            tournee.setLivraisonDestinationNom(req.getLivraisonDestinationNom());
+        }
+
+        if (req.getLivraisonDestinationAdresse() != null) {
+            tournee.setLivraisonDestinationAdresse(req.getLivraisonDestinationAdresse());
+        }
+
         // Check if resources changed
         if (req.getBenneId() != null && !req.getBenneId().equals(tournee.getBenne().getId())) {
             Ressource newBenne = ressourceRepo.findById(req.getBenneId())
@@ -563,6 +608,24 @@ public class TourneeServiceImpl implements TourneeService {
 
     // ========== MÉTHODES UTILITAIRES (CONSERVÉES INTACTES) ==========
     
+    private Utilisateur resolveResponsablePressoir(String responsablePressoirId) {
+        if (responsablePressoirId == null || responsablePressoirId.isBlank()) {
+            return null;
+        }
+        Utilisateur responsablePressoir = utilisateurRepo.findById(responsablePressoirId)
+                .orElseThrow(() -> new ResourceNotFoundException("Responsable pressoir introuvable : " + responsablePressoirId));
+        if (responsablePressoir.getRole() != Role.RESPONSABLE_PRESSOIR) {
+            throw new IllegalArgumentException("L'utilisateur selectionne n'est pas un responsable pressoir.");
+        }
+        if (Boolean.FALSE.equals(responsablePressoir.getEstActif()) || responsablePressoir.isEstSupprime()) {
+            throw new IllegalStateException("Le responsable pressoir selectionne n'est pas actif.");
+        }
+        if (responsablePressoir.getPressoir() == null) {
+            throw new IllegalStateException("Le responsable pressoir selectionne n'a pas de pressoir configure.");
+        }
+        return responsablePressoir;
+    }
+
     private void validateDates(Date debut, Date fin) {
         if (debut == null || fin == null)
             throw new IllegalArgumentException("La date de début et la date de fin sont obligatoires.");
@@ -655,6 +718,7 @@ public class TourneeServiceImpl implements TourneeService {
 
         Ressource benne = t.getBenne();
         Ressource tracteur = t.getTracteur();
+        Utilisateur responsablePressoir = t.getResponsablePressoir();
 
         List<String> travailleurIds = new ArrayList<>();
         List<String> travailleurNoms = new ArrayList<>();
@@ -692,6 +756,12 @@ public class TourneeServiceImpl implements TourneeService {
                 .observations(t.getObservations())
                 .livraisonDestinationNom(t.getLivraisonDestinationNom())
                 .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                .responsablePressoirId(responsablePressoir != null ? responsablePressoir.getId() : t.getResponsablePressoirId())
+                .responsablePressoirNom(responsablePressoir != null
+                        ? ((responsablePressoir.getPrenom() != null ? responsablePressoir.getPrenom() : "") + " " + (responsablePressoir.getNom() != null ? responsablePressoir.getNom() : "")).trim()
+                        : null)
+                .pressoirNom(responsablePressoir != null && responsablePressoir.getPressoir() != null ? responsablePressoir.getPressoir().getNom() : null)
+                .pressoirAdresse(responsablePressoir != null && responsablePressoir.getPressoir() != null ? responsablePressoir.getPressoir().getAdresse() : null)
                 .livraisonStartedAt(t.getLivraisonStartedAt())
                 .livraisonCompletedAt(t.getLivraisonCompletedAt())
                 .livraisonEvidenceName(t.getLivraisonEvidenceName())

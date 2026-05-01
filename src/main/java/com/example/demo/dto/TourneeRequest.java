@@ -37,6 +37,7 @@ public class TourneeRequest {
     private String collecteId;
 
     private String observations;
+    private String responsablePressoirId;
     private String livraisonDestinationNom;
     private String livraisonDestinationAdresse;
 }

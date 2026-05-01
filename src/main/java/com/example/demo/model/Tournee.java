@@ -47,6 +47,9 @@ public class Tournee {
 	@DocumentReference(lazy = true)
 	private Utilisateur transporteur;
 
+	@DocumentReference(lazy = true)
+	private Utilisateur responsablePressoir;
+
 	/**
 	 * Planned start date (set at creation, updated when demarrer() is called). Used
 	 * for availability overlap checks.
@@ -69,6 +72,7 @@ public class Tournee {
 	private Boolean collecteFinalisee;
 
 	private String observations;
+	private String responsablePressoirId;
 	private String livraisonDestinationNom;
 	private String livraisonDestinationAdresse;
 	@DocumentReference(lazy = true)

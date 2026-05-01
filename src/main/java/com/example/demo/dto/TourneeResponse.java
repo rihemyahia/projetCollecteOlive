@@ -48,6 +48,10 @@ public class TourneeResponse {
     private String observations;
     private String livraisonDestinationNom;
     private String livraisonDestinationAdresse;
+    private String responsablePressoirId;
+    private String responsablePressoirNom;
+    private String pressoirNom;
+    private String pressoirAdresse;
     private Date livraisonStartedAt;
     private Date livraisonCompletedAt;
     private String livraisonEvidenceName;
