@@ -42,10 +42,13 @@ public class AdminTransporteurController {
 
         // Include both PLANIFIEE and TERMINEE so admin can assign transporteurs after harvest
         Page<Tournee> disponibles = tourneeRepository.findByStatutInAndTransporteurIsNull(
+                java.util.Arrays.asList(StatutTournee.PLANIFIEE, StatutTournee.EN_COURS, StatutTournee.TERMINEE),
                 pageable
         );
 
+        Map<String, Object> response = new HashMap<>();
         response.put("content", disponibles.getContent());
+        response.put("totalPages", disponibles.getTotalPages());
         response.put("totalElements", disponibles.getTotalElements());
         response.put("currentPage", disponibles.getNumber());
 
