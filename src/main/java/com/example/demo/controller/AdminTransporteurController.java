@@ -42,7 +42,8 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
     
     // Include both PLANIFIEE and TERMINEE so admin can assign transporteurs after harvest
     Page<Tournee> disponibles = tourneeRepository.findByStatutInAndTransporteurIsNull(
-        java.util.Arrays.asList(StatutTournee.PLANIFIEE, StatutTournee.TERMINEE), pageable
+        java.util.Arrays.asList(StatutTournee.PLANIFIEE, StatutTournee.EN_COURS, StatutTournee.TERMINEE),
+            pageable
     );
     
     Map<String, Object> response = new HashMap<>();
@@ -109,8 +110,10 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         // Validate requested tournées can be assigned to this transporteur.
         for (Tournee t : requestedTournees) {
             // Allow assigning PLANIFIEE or TERMINEE so admin can assign transporteur after harvest
-            if (t.getStatut() != StatutTournee.PLANIFIEE && t.getStatut() != StatutTournee.TERMINEE) {
-                throw new RuntimeException("Seules les tournées PLANIFIEE ou TERMINEE peuvent être assignées");
+            if (t.getStatut() != StatutTournee.PLANIFIEE
+                    && t.getStatut() != StatutTournee.EN_COURS
+                    && t.getStatut() != StatutTournee.TERMINEE) {
+                throw new RuntimeException("Seules les tournées PLANIFIEE, EN_COURS ou TERMINEE peuvent être assignées");
             }
             if (t.getTransporteur() != null
                     && t.getTransporteur().getId() != null

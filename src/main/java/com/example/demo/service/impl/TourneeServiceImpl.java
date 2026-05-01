@@ -49,10 +49,7 @@ public class TourneeServiceImpl implements TourneeService {
                 .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
     }
 
-    private boolean hasDeliveryDestination(Tournee t) {
-        return t.getLivraisonDestinationNom() != null && !t.getLivraisonDestinationNom().isBlank()
-                && t.getLivraisonDestinationAdresse() != null && !t.getLivraisonDestinationAdresse().isBlank();
-    }
+
     
     private Utilisateur getCurrentUserEntity(UserDetails currentUser) {
         return utilisateurRepo.findByEmail(currentUser.getUsername())
@@ -310,8 +307,7 @@ public class TourneeServiceImpl implements TourneeService {
         Tournee tournee = findOrThrow(id);
         if (tournee.getStatut() != StatutTournee.EN_COURS)
             throw new IllegalStateException("Seule une tournée EN_COURS peut être terminée.");
-        if (!hasDeliveryDestination(tournee))
-            throw new IllegalStateException("Destination de livraison (pressoir) obligatoire avant de terminer la tournée.");
+
 
         tournee.setStatut(StatutTournee.TERMINEE);
         tournee.setQuantiteCollecteeKg(req.getQuantiteCollecteeKg());
