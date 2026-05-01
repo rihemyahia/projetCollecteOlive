@@ -115,6 +115,34 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
                     && !id.equals(t.getTransporteur().getId())) {
                 throw new RuntimeException("La tournée " + t.getCode() + " est déjà assignée à un autre transporteur");
             }
+
+            // Dates are required to check for time overlaps
+            if (t.getDateDebut() == null || t.getDateFin() == null) {
+                throw new RuntimeException("La tournée " + t.getCode() + " n'a pas de dates valides pour vérification de conflit");
+            }
+
+            // Check transporteur conflicts: ensure this transporteur has no other assigned tournées overlapping
+            List<Tournee> transConflicts = tourneeRepository.findConflictsByTransporteur(
+                    transporteur.getId(), t.getDateDebut(), t.getDateFin(), t.getId());
+            if (!transConflicts.isEmpty()) {
+                throw new RuntimeException("Le transporteur a une tournée en conflit avec " + t.getCode());
+            }
+
+            // Check benne and tracteur conflicts to avoid double-booking vehicles when reassigning
+            if (t.getBenne() != null && t.getBenne().getId() != null) {
+                List<Tournee> benneConflicts = tourneeRepository.findConflictsByBenne(
+                        t.getBenne().getId(), t.getDateDebut(), t.getDateFin(), t.getId());
+                if (!benneConflicts.isEmpty()) {
+                    throw new RuntimeException("La benne est en conflit pour la tournée " + t.getCode());
+                }
+            }
+            if (t.getTracteur() != null && t.getTracteur().getId() != null) {
+                List<Tournee> tracteurConflicts = tourneeRepository.findConflictsByTracteur(
+                        t.getTracteur().getId(), t.getDateDebut(), t.getDateFin(), t.getId());
+                if (!tracteurConflicts.isEmpty()) {
+                    throw new RuntimeException("Le tracteur est en conflit pour la tournée " + t.getCode());
+                }
+            }
         }
 
         // Replace behavior using targeted datasets:

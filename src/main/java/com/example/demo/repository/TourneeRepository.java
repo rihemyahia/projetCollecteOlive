@@ -93,4 +93,17 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
             "  ] " +
             "}")
     List<Tournee> findConflictsByTravailleur(String travailleurId, Date debut, Date fin, String excludeId);
+
+    // CONFLICT QUERY FOR TRANSPORTEUR (used when assigning tournees to a transporteur)
+    @Query("{ " +
+            "  'transporteur.id': ?0, " +
+            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS','TERMINEE','EN_LIVRAISON'] }, " +
+            "  '_id': { $ne: ?3 }, " +
+            "  $or: [ " +
+            "    { $and: [ { 'dateDebut': { $lt: ?2 } }, { 'dateFin': { $gt: ?1 } } ] }, " +
+            "    { $and: [ { 'dateDebut': { $gte: ?1 } }, { 'dateDebut': { $lt: ?2 } } ] }, " +
+            "    { $and: [ { 'dateFin': { $gt: ?1 } }, { 'dateFin': { $lte: ?2 } } ] } " +
+            "  ] " +
+            "}")
+    List<Tournee> findConflictsByTransporteur(String transporteurId, Date debut, Date fin, String excludeId);
 }
