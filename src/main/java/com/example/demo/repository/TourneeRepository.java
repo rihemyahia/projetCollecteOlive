@@ -47,6 +47,8 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     List<Tournee> findConflictsByBenne(String benneId, Date debut, Date fin, String excludeId);
     @Query("{ 'statut': ?0, 'transporteur': null }")
     Page<Tournee> findByStatutAndTransporteurIsNull(StatutTournee statut, Pageable pageable);
+        @Query("{ 'statut': { $in: ?0 }, 'transporteur': null }")
+        Page<Tournee> findByStatutInAndTransporteurIsNull(List<StatutTournee> statuses, Pageable pageable);
     @Query("{ 'transporteur.id': ?0 }")
     List<Tournee> findByTransporteurId(String transporteurId, Sort sort);
     @Query("{ 'transporteur.id': ?0, 'statut': ?1 }")

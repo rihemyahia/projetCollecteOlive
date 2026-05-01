@@ -95,6 +95,10 @@ public class TransporteurController {
             tournee.setLivraisonStartedAt(new Date());
             tourneeRepository.save(tournee);
 
+            // mark transporteur unavailable while delivering
+            transporteur.setDisponibleTransport(false);
+            utilisateurRepository.save(transporteur);
+
             return ResponseEntity.ok(Map.of(
                     "message", "Livraison démarrée",
                     "tourneeId", tournee.getId(),
@@ -149,6 +153,13 @@ public class TransporteurController {
             tournee.setStatut(StatutTournee.LIVREE);
             tournee.setLivraisonCompletedAt(new Date());
             tourneeRepository.save(tournee);
+
+                // After completing, recompute transporteur availability: available if no other non-delivered/active tournees
+                List<Tournee> assigned = tourneeRepository.findByTransporteurId(transporteur.getId(), Sort.unsorted());
+                boolean hasActive = assigned.stream()
+                    .anyMatch(tt -> tt.getStatut() != null && tt.getStatut() != StatutTournee.LIVREE && tt.getStatut() != StatutTournee.ANNULEE);
+                transporteur.setDisponibleTransport(!hasActive);
+                utilisateurRepository.save(transporteur);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Livraison terminée",

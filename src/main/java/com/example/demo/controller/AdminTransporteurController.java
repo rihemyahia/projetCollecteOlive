@@ -40,8 +40,9 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
 ) {
     Pageable pageable = PageRequest.of(page, size, Sort.by("dateDebut").ascending());
     
-    Page<Tournee> disponibles = tourneeRepository.findByStatutAndTransporteurIsNull(
-        StatutTournee.PLANIFIEE, pageable
+    // Include both PLANIFIEE and TERMINEE so admin can assign transporteurs after harvest
+    Page<Tournee> disponibles = tourneeRepository.findByStatutInAndTransporteurIsNull(
+        java.util.Arrays.asList(StatutTournee.PLANIFIEE, StatutTournee.TERMINEE), pageable
     );
     
     Map<String, Object> response = new HashMap<>();
@@ -107,8 +108,9 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
 
         // Validate requested tournées can be assigned to this transporteur.
         for (Tournee t : requestedTournees) {
-            if (t.getStatut() != StatutTournee.PLANIFIEE) {
-                throw new RuntimeException("Seules les tournées PLANIFIEE peuvent être assignées");
+            // Allow assigning PLANIFIEE or TERMINEE so admin can assign transporteur after harvest
+            if (t.getStatut() != StatutTournee.PLANIFIEE && t.getStatut() != StatutTournee.TERMINEE) {
+                throw new RuntimeException("Seules les tournées PLANIFIEE ou TERMINEE peuvent être assignées");
             }
             if (t.getTransporteur() != null
                     && t.getTransporteur().getId() != null
@@ -158,6 +160,13 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
             t.setTransporteur(transporteur);
             tourneeRepository.save(t);
         }
+
+        // After changing assignments, recompute and persist transporteur availability flag
+        List<Tournee> nowAssigned = tourneeRepository.findByTransporteurId(transporteur.getId(), Sort.unsorted());
+        boolean hasActive = nowAssigned.stream()
+                .anyMatch(tt -> tt.getStatut() != null && tt.getStatut() != StatutTournee.LIVREE && tt.getStatut() != StatutTournee.ANNULEE);
+        transporteur.setDisponibleTransport(!hasActive);
+        utilisateurRepository.save(transporteur);
 
         return getTourneesAssignees(id);
     }
