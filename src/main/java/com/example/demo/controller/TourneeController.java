@@ -49,7 +49,7 @@ public class TourneeController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN', 'TRANSPORTEUR')")
     public ResponseEntity<TourneeResponse> getById(
             @PathVariable String id,
             @AuthenticationPrincipal UserDetails currentUser) {

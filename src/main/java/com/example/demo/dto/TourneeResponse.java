@@ -46,6 +46,12 @@ public class TourneeResponse {
 
     // Metadata
     private String observations;
+    private String livraisonDestinationNom;
+    private String livraisonDestinationAdresse;
+    private Date livraisonStartedAt;
+    private Date livraisonCompletedAt;
+    private String livraisonEvidenceName;
+    private String livraisonEvidenceUrl;
     private Date dateDebut;
     private Date dateFin;
     private Date dateCreation;

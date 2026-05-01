@@ -48,6 +48,11 @@ public class TourneeServiceImpl implements TourneeService {
         return currentUser.getAuthorities().stream()
                 .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
     }
+
+    private boolean hasDeliveryDestination(Tournee t) {
+        return t.getLivraisonDestinationNom() != null && !t.getLivraisonDestinationNom().isBlank()
+                && t.getLivraisonDestinationAdresse() != null && !t.getLivraisonDestinationAdresse().isBlank();
+    }
     
     private Utilisateur getCurrentUserEntity(UserDetails currentUser) {
         return utilisateurRepo.findByEmail(currentUser.getUsername())
@@ -75,6 +80,18 @@ public class TourneeServiceImpl implements TourneeService {
         if (isAdmin(currentUser)) {
             return; // Admin a accès à tout
         }
+
+        Utilisateur currentUserEntity = getCurrentUserEntity(currentUser);
+
+        // Transporteur : uniquement les tournées qui lui sont assignées
+        if (currentUserEntity.getRole() == Role.TRANSPORTEUR) {
+            if (tournee.getTransporteur() != null
+                    && tournee.getTransporteur().getId() != null
+                    && tournee.getTransporteur().getId().equals(currentUserEntity.getId())) {
+                return;
+            }
+            throw new SecurityException("Vous n'avez pas accès à cette tournée");
+        }
         
         // Pour RESPONSABLE, vérifier qu'il est responsable du verger de la tournée
         Verger verger = tournee.getVerger();
@@ -82,10 +99,8 @@ public class TourneeServiceImpl implements TourneeService {
             throw new SecurityException("Verger non trouvé pour cette tournée");
         }
         
-        Utilisateur responsable = getCurrentUserEntity(currentUser);
-        
-        if (verger.getResponsable() == null || 
-            !verger.getResponsable().getId().equals(responsable.getId())) {
+        if (verger.getResponsable() == null ||
+            !verger.getResponsable().getId().equals(currentUserEntity.getId())) {
             throw new SecurityException("Vous n'avez pas accès à cette tournée");
         }
     }
@@ -188,6 +203,8 @@ public class TourneeServiceImpl implements TourneeService {
                 .dateFin(dateFin)
                 .distanceTotale(req.getDistanceTotale())
                 .observations(req.getObservations())
+                .livraisonDestinationNom(req.getLivraisonDestinationNom())
+                .livraisonDestinationAdresse(req.getLivraisonDestinationAdresse())
                 .collecteFinalisee(false)
                 .dateCreation(new Date())
                 .build();
@@ -293,6 +310,8 @@ public class TourneeServiceImpl implements TourneeService {
         Tournee tournee = findOrThrow(id);
         if (tournee.getStatut() != StatutTournee.EN_COURS)
             throw new IllegalStateException("Seule une tournée EN_COURS peut être terminée.");
+        if (!hasDeliveryDestination(tournee))
+            throw new IllegalStateException("Destination de livraison (pressoir) obligatoire avant de terminer la tournée.");
 
         tournee.setStatut(StatutTournee.TERMINEE);
         tournee.setQuantiteCollecteeKg(req.getQuantiteCollecteeKg());
@@ -343,6 +362,10 @@ public class TourneeServiceImpl implements TourneeService {
         Tournee tournee = findOrThrow(id);
         if (tournee.getStatut() == StatutTournee.TERMINEE)
             throw new IllegalStateException("Une tournée TERMINÉE ne peut pas être annulée.");
+        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON)
+            throw new IllegalStateException("Une tournée EN LIVRAISON ne peut pas être annulée.");
+        if (tournee.getStatut() == StatutTournee.LIVREE)
+            throw new IllegalStateException("Une tournée LIVRÉE ne peut pas être annulée.");
 
         tournee.setStatut(StatutTournee.ANNULEE);
         tournee.setCollecteFinalisee(false);
@@ -359,11 +382,27 @@ public class TourneeServiceImpl implements TourneeService {
     public TourneeResponse mettreAJour(String id, TourneeRequest req, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
         checkTourneeAccess(tournee, currentUser);
-        return mettreAJourInterne(id, req);
+        return mettreAJourInterne(id, req, currentUser);
     }
     
-    private TourneeResponse mettreAJourInterne(String id, TourneeRequest req) {
+    private TourneeResponse mettreAJourInterne(String id, TourneeRequest req, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
+        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON || tournee.getStatut() == StatutTournee.LIVREE) {
+            throw new IllegalStateException("Destination en lecture seule pendant/après la livraison.");
+        }
+        if (tournee.getStatut() == StatutTournee.EN_COURS) {
+            // During harvest, only privileged late destination update is allowed.
+            if (!isAdmin(currentUser)) {
+                throw new IllegalStateException("En cours: seule une mise à jour destination par ADMIN est autorisée.");
+            }
+            boolean destinationProvided = req.getLivraisonDestinationNom() != null || req.getLivraisonDestinationAdresse() != null;
+            if (!destinationProvided) {
+                throw new IllegalStateException("En cours: seules les informations de destination peuvent être modifiées.");
+            }
+            if (req.getLivraisonDestinationNom() != null) tournee.setLivraisonDestinationNom(req.getLivraisonDestinationNom());
+            if (req.getLivraisonDestinationAdresse() != null) tournee.setLivraisonDestinationAdresse(req.getLivraisonDestinationAdresse());
+            return toResponse(tourneeRepo.save(tournee));
+        }
         if (tournee.getStatut() != StatutTournee.PLANIFIEE)
             throw new IllegalStateException("Seule une tournée PLANIFIÉE peut être modifiée.");
 
@@ -377,6 +416,8 @@ public class TourneeServiceImpl implements TourneeService {
         if (req.getNbreArbre() != null && req.getNbreArbre() > 0) tournee.setNbreArbre(req.getNbreArbre());
         if (req.getDistanceTotale() != null) tournee.setDistanceTotale(req.getDistanceTotale());
         if (req.getObservations() != null) tournee.setObservations(req.getObservations());
+        if (req.getLivraisonDestinationNom() != null) tournee.setLivraisonDestinationNom(req.getLivraisonDestinationNom());
+        if (req.getLivraisonDestinationAdresse() != null) tournee.setLivraisonDestinationAdresse(req.getLivraisonDestinationAdresse());
 
         return toResponse(tourneeRepo.save(tournee));
     }
@@ -587,6 +628,12 @@ public class TourneeServiceImpl implements TourneeService {
                 .collecteFinalisee(t.getCollecteFinalisee())
                 .efficacite(calculerEfficacite(t))
                 .observations(t.getObservations())
+                .livraisonDestinationNom(t.getLivraisonDestinationNom())
+                .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                .livraisonStartedAt(t.getLivraisonStartedAt())
+                .livraisonCompletedAt(t.getLivraisonCompletedAt())
+                .livraisonEvidenceName(t.getLivraisonEvidenceName())
+                .livraisonEvidenceUrl(t.getLivraisonEvidenceUrl())
                 .dateDebut(t.getDateDebut())
                 .dateFin(t.getDateFin())
                 .dateCreation(t.getDateCreation())

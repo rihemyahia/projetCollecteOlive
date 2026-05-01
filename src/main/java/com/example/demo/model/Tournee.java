@@ -69,6 +69,8 @@ public class Tournee {
 	private Boolean collecteFinalisee;
 
 	private String observations;
+	private String livraisonDestinationNom;
+	private String livraisonDestinationAdresse;
 	@DocumentReference(lazy = true)
 	private Collecte collecte;
 	@CreatedDate
