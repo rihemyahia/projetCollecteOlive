@@ -77,6 +77,11 @@ public class Tournee {
 	private Date dateCreation;
 
 	// ========== LIVRAISON (proof & timestamps) ==========
+	/** Créneau estimé (admin) pour la livraison au pressoir — permet plusieurs livraisons le même jour sans chevauchement. */
+	private Date livraisonEstimeDebut;
+	private Date livraisonEstimeFin;
+	/** Consigne courte pour le transporteur (optionnel). */
+	private String livraisonNotes;
 	private Date livraisonStartedAt;
 	private Date livraisonCompletedAt;
 	private String livraisonEvidenceName;
