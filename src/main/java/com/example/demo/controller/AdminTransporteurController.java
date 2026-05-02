@@ -7,6 +7,10 @@ import com.example.demo.model.Tournee;
 import com.example.demo.model.Utilisateur;
 import com.example.demo.repository.TourneeRepository;
 import com.example.demo.repository.UtilisateurRepository;
+import com.example.demo.repository.VergerRepository;
+import com.example.demo.model.Verger;
+import com.example.demo.service.TourneeAssignListPressoirEnricher;
+import com.example.demo.service.TourneeDisponiblesQueryService;
 import com.example.demo.service.TourneeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -15,19 +19,27 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import org.bson.types.ObjectId;
+import java.text.SimpleDateFormat;
+import java.time.Year;
+import java.text.SimpleDateFormat;
+import java.time.Year;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/transporteurs")
-@CrossOrigin(origins = "http://localhost:4200")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','RESPONSABLE')")
 public class AdminTransporteurController {
 
     @Autowired
@@ -37,49 +49,112 @@ public class AdminTransporteurController {
     private TourneeRepository tourneeRepository;
 
     @Autowired
+    private VergerRepository vergerRepository;
+
+    @Autowired
     private TourneeService tourneeService;
 
-    @GetMapping("/tournees-disponibles")
-public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "100") int size
-) {
-    System.out.println("[DEBUG] GET /api/admin/transporteurs/tournees-disponibles page=" + page + " size=" + size);
-    // Plus récent en premier : évite que la 1re page soit remplie uniquement de vieilles TERMINEE sans transporteur.
-    Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateDebut"));
+    @Autowired
+    private TourneeAssignListPressoirEnricher tourneeAssignListPressoirEnricher;
 
-    // Compute allowed assignable statuses dynamically: everything except
-    // EN_LIVRAISON, LIVREE, ANNULEE. This keeps frontend and backend in sync
-    // if we later add new statuses.
-    java.util.List<StatutTournee> allowed = java.util.Arrays.stream(StatutTournee.values())
-            .filter(s -> s != StatutTournee.EN_LIVRAISON && s != StatutTournee.LIVREE && s != StatutTournee.ANNULEE)
-            .collect(java.util.stream.Collectors.toList());
+    @Autowired
+    private TourneeDisponiblesQueryService tourneeDisponiblesQueryService;
 
-    System.out.println("[DEBUG] Allowed statuts: " + allowed);
-
-    Page<Tournee> disponibles = tourneeRepository.findByStatutInAndTransporteurIsNull(allowed, pageable);
-    
-    System.out.println("[DEBUG] Found " + disponibles.getNumberOfElements() + " tournees");
-    if (disponibles.getNumberOfElements() > 0) {
-        System.out.println("[DEBUG] First 3 tournees:");
-        for (int i = 0; i < Math.min(3, disponibles.getNumberOfElements()); i++) {
-            Tournee t = disponibles.getContent().get(i);
-            System.out.println("  [" + i + "] id=" + t.getId() + " statut=" + t.getStatut() + " code=" + t.getCode());
+    private Utilisateur currentAuthenticatedUtilisateur() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null || auth.getName().isBlank()) {
+            throw new RuntimeException("Utilisateur non authentifié");
         }
+        return utilisateurRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
     }
 
-    List<TourneeResponse> contentLight = disponibles.getContent().stream()
-            .map(tourneeService::toResponseForTransporteurAssignList)
-            .collect(Collectors.toList());
+    private static boolean ownsVergerTournee(Tournee t, String responsableTerrainId) {
+        if (t == null || t.getVerger() == null || responsableTerrainId == null || responsableTerrainId.isBlank()) {
+            return false;
+        }
+        Verger v = t.getVerger();
+        Utilisateur r = v.getResponsable();
+        return r != null && responsableTerrainId.equals(r.getId());
+    }
 
-    Map<String, Object> response = new HashMap<>();
-    response.put("content", contentLight);
-    response.put("totalPages", disponibles.getTotalPages());
-    response.put("totalElements", disponibles.getTotalElements());
-    response.put("currentPage", disponibles.getNumber());
+    private static String fmtDeliveryWindow(Date d) {
+        if (d == null) {
+            return "?";
+        }
+        return new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(d);
+    }
 
-    return ResponseEntity.ok(response);
-}
+    /**
+     * Liste des transporteurs pour l’assignation des tournées — réservé à l’ADMIN.
+     * Les responsables terrain utilisent {@code GET /api/responsable/transporteurs}.
+     */
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Utilisateur>> listTransporteursPourAssignationAdmin() {
+        List<Utilisateur> transporteurs = utilisateurRepository.findByRole(Role.TRANSPORTEUR);
+        return ResponseEntity.ok(transporteurs);
+    }
+
+    @GetMapping("/tournees-disponibles")
+    public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String q
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateDebut"));
+
+        java.util.List<StatutTournee> allowed = java.util.Arrays.stream(StatutTournee.values())
+                .filter(s -> s != StatutTournee.EN_LIVRAISON && s != StatutTournee.LIVREE && s != StatutTournee.ANNULEE)
+                .collect(java.util.stream.Collectors.toList());
+
+        Integer yearFilter;
+        if (year == null) {
+            yearFilter = Year.now().getValue();
+        } else if (year == 0) {
+            yearFilter = null;
+        } else {
+            yearFilter = year;
+        }
+
+        Utilisateur actor = currentAuthenticatedUtilisateur();
+        Page<Tournee> disponibles;
+        if (actor.getRole() == Role.ADMIN) {
+            disponibles = tourneeDisponiblesQueryService.findDisponiblesAssignation(
+                    allowed, null, yearFilter, q, pageable);
+        } else if (actor.getRole() == Role.RESPONSABLE) {
+            List<Verger> vergers = vergerRepository.findByResponsableId(actor.getId());
+            List<String> vergerIds = vergers.stream()
+                    .filter(v -> v != null && !Boolean.TRUE.equals(v.getEstSupprimer()))
+                    .map(Verger::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            if (vergerIds.isEmpty()) {
+                disponibles = Page.empty(pageable);
+            } else {
+                disponibles = tourneeDisponiblesQueryService.findDisponiblesAssignation(
+                        allowed, vergerIds, yearFilter, q, pageable);
+            }
+        } else {
+            throw new RuntimeException("Accès réservé à l’administrateur ou au responsable terrain");
+        }
+
+        List<Tournee> contentEntities = disponibles.getContent();
+        List<TourneeResponse> contentLight = contentEntities.stream()
+                .map(tourneeService::toResponseForTransporteurAssignList)
+                .collect(Collectors.toList());
+        tourneeAssignListPressoirEnricher.enrichPressoirDisplayFields(contentLight, contentEntities);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", contentLight);
+        response.put("totalPages", disponibles.getTotalPages());
+        response.put("totalElements", disponibles.getTotalElements());
+        response.put("currentPage", disponibles.getNumber());
+        response.put("yearApplied", yearFilter != null ? yearFilter : 0);
+
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/{id}/tournees")
     public ResponseEntity<Map<String, Object>> getTourneesAssignees(@PathVariable String id) {
         Utilisateur transporteur = utilisateurRepository.findById(id)
@@ -97,12 +172,12 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         for (Tournee t : assignees) {
             System.out.println("[DEBUG] Assigned tournee id=" + t.getId() + " statut=" + t.getStatut());
         }
-        
+
         // Include EN_LIVRAISON so admin UI can show active delivery and compute date conflicts.
         // Exclude only finished / cancelled (reassignment irrelevant).
         List<Tournee> forPanel = assignees.stream()
                 .filter(t -> t.getStatut() != StatutTournee.LIVREE
-                          && t.getStatut() != StatutTournee.ANNULEE)
+                        && t.getStatut() != StatutTournee.ANNULEE)
                 .collect(java.util.stream.Collectors.toList());
 
         System.out.println("[DEBUG] Filtered from " + assignees.size() + " to " + forPanel.size() + " tournees (panel)");
@@ -110,6 +185,7 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         List<TourneeResponse> tourneesLight = forPanel.stream()
                 .map(tourneeService::toResponseForTransporteurAssignList)
                 .collect(Collectors.toList());
+        tourneeAssignListPressoirEnricher.enrichPressoirDisplayFields(tourneesLight, forPanel);
 
         Map<String, Object> response = new HashMap<>();
         response.put("transporteur", transporteur);
@@ -157,24 +233,38 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         System.out.println("[DEBUG] ===== PATCH /api/admin/transporteurs/{id}/tournees =====");
         System.out.println("[DEBUG] Transporteur ID: " + id);
 
+        Utilisateur actor = currentAuthenticatedUtilisateur();
         Utilisateur transporteur = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transporteur non trouvé"));
         if (transporteur.getRole() != Role.TRANSPORTEUR) {
             throw new RuntimeException("L'utilisateur n'est pas un transporteur");
         }
 
-        Set<String> targetIds = request != null && request.getTourneesIds() != null
+        Set<String> bodyIds = request != null && request.getTourneesIds() != null
                 ? request.getTourneesIds().stream().filter(x -> x != null && !x.isBlank()).collect(Collectors.toSet())
                 : Set.of();
-        
-        System.out.println("[DEBUG] Target IDs after filtering: " + targetIds);
 
         List<Tournee> currentlyAssigned = tourneeRepository.findByTransporteurId(id, Sort.unsorted());
+
+        Set<String> lockedTourneeIds = new java.util.HashSet<>();
+        if (actor.getRole() == Role.RESPONSABLE) {
+            for (Tournee ct : currentlyAssigned) {
+                if (!ownsVergerTournee(ct, actor.getId())) {
+                    lockedTourneeIds.add(ct.getId());
+                }
+            }
+        }
+
+        Set<String> targetIds = new java.util.HashSet<>(bodyIds);
+        targetIds.addAll(lockedTourneeIds);
+
+        System.out.println("[DEBUG] Body IDs: " + bodyIds + ", effective target IDs (avec verrous responsable): " + targetIds);
+
         List<Tournee> requestedTournees = new java.util.ArrayList<>();
         if (!targetIds.isEmpty()) {
             tourneeRepository.findAllById(targetIds).forEach(requestedTournees::add);
         }
-        
+
         System.out.println("[DEBUG] Found " + requestedTournees.size() + " tournees from DB");
 
         if (!targetIds.isEmpty() && requestedTournees.size() != targetIds.size()) {
@@ -196,11 +286,22 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
             }
         }
 
+        java.util.Set<String> previouslyAssignedIds = currentlyAssigned.stream()
+                .map(Tournee::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        boolean adminActor = actor.getRole() == Role.ADMIN;
+
         for (Tournee t : requestedTournees) {
             System.out.println("[DEBUG] Requested tournee id=" + t.getId() + " statut=" + t.getStatut());
             StatutTournee st = t.getStatut();
-            if (st == null || !allowedSet.contains(st)) {
-                throw new RuntimeException("Tournée non assignable (id=" + t.getId() + ", statut=" + st + ") - seules les tournées PLANIFIEE, EN_COURS ou TERMINEE peuvent être assignées");
+            boolean gardeLivraisonEnCoursMemeTransporteur =
+                    st == StatutTournee.EN_LIVRAISON && previouslyAssignedIds.contains(t.getId());
+            if (st == null || (!allowedSet.contains(st) && !gardeLivraisonEnCoursMemeTransporteur)) {
+                throw new RuntimeException("La tournée " + (t.getCode() != null ? t.getCode() : t.getId())
+                        + " ne peut pas être assignée ou conservée dans cette liste : statut « " + st + " ». "
+                        + "Seules les tournées planifiées, en cours de collecte ou terminées (collecte) peuvent être assignées ; "
+                        + "une tournée déjà en livraison sur ce transporteur peut rester dans la liste tant que la livraison n’est pas terminée.");
             }
             if (t.getTransporteur() != null
                     && t.getTransporteur().getId() != null
@@ -231,6 +332,17 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
                 }
             }
 
+            boolean newlyAssigned = !previouslyAssignedIds.contains(t.getId());
+            if (!adminActor && newlyAssigned && !ownsVergerTournee(t, actor.getId())) {
+                throw new RuntimeException("Vous ne pouvez pas assigner la tournée " + t.getCode()
+                        + " : le verger est hors de votre périmètre.");
+            }
+            if (newlyAssigned && (t.getLivraisonEstimeDebut() == null || t.getLivraisonEstimeFin() == null)) {
+                throw new RuntimeException("Créneau de livraison obligatoire (début et fin) pour l’assignation de la tournée "
+                        + t.getCode()
+                        + ". Les horaires du créneau servent à détecter les chevauchements pour le transporteur.");
+            }
+
             // Benne / tracteur : toujours sur la période de récolte (ressources sur le terrain)
             if (t.getBenne() != null && t.getBenne().getId() != null) {
                 List<Tournee> benneConflicts = tourneeRepository.findConflictsByBenne(
@@ -251,9 +363,18 @@ public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
         // Conflit transporteur : chevauchement des créneaux de livraison estimés (sinon période tournée)
         for (int i = 0; i < requestedTournees.size(); i++) {
             for (int j = i + 1; j < requestedTournees.size(); j++) {
-                if (deliveryWindowsOverlap(requestedTournees.get(i), requestedTournees.get(j))) {
-                    throw new RuntimeException("Créneaux de livraison en conflit pour le transporteur entre "
-                            + requestedTournees.get(i).getCode() + " et " + requestedTournees.get(j).getCode());
+                Tournee ti = requestedTournees.get(i);
+                Tournee tj = requestedTournees.get(j);
+                if (deliveryWindowsOverlap(ti, tj)) {
+                    throw new RuntimeException(String.format(
+                            "Chevauchement des créneaux de livraison pour ce transporteur : la tournée %s (%s → %s)"
+                                    + " chevauche la tournée %s (%s → %s). Ajustez les horaires du créneau de livraison.",
+                            ti.getCode(),
+                            fmtDeliveryWindow(deliveryWindowStart(ti)),
+                            fmtDeliveryWindow(deliveryWindowEnd(ti)),
+                            tj.getCode(),
+                            fmtDeliveryWindow(deliveryWindowStart(tj)),
+                            fmtDeliveryWindow(deliveryWindowEnd(tj))));
                 }
             }
         }

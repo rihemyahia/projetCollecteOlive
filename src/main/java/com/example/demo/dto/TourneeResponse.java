@@ -17,6 +17,8 @@ public class TourneeResponse {
 
     // Verger info
     private String vergerId;
+    /** Responsable terrain rattaché au verger — pour filtrage UI (assignation transporteur). */
+    private String vergerResponsableId;
     private String vergerTypeOlive;
     private String vergerAgriculteurNom;
     private Double vergerSuperficie;

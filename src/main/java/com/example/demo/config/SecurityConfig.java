@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Preflight CORS : pas d’en-tête Authorization → doit passer avant les règles JWT
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // 1. Public
                         .requestMatchers("/api/auth/login/**").permitAll()
                         .requestMatchers("/api/collectes/**").permitAll()
@@ -48,6 +50,7 @@ public class SecurityConfig {
 
                         // 3. Management & Modules
                         .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/transporteurs/**").hasAnyRole("ADMIN", "RESPONSABLE")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/utilisateurs/**").hasRole("ADMIN")
                         .requestMatchers("/api/responsable/**").hasAnyRole("ADMIN", "RESPONSABLE")
@@ -73,9 +76,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.asList("http://localhost:4200"));
+        // Patterns (avec credentials) : couvre 4200, autre port, 127.0.0.1
+        config.setAllowedOriginPatterns(Arrays.asList("http://localhost:*", "http://127.0.0.1:*"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        config.setExposedHeaders(Arrays.asList("Authorization", "Content-Type"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -37,6 +37,16 @@ public class ResponsableController {
         System.out.println("📋 Récupération des travailleurs: " + travailleurs.size() + " trouvés");
         return ResponseEntity.ok(travailleurs);
     }
+
+    /**
+     * Liste des transporteurs pour l’assignation (ADMIN et RESPONSABLE — voir sécurité classe).
+     * Le front préfère {@code GET /api/admin/transporteurs} pour l’admin et cette route pour le responsable.
+     */
+    @GetMapping("/transporteurs")
+    public ResponseEntity<List<Utilisateur>> getTransporteursPourAssignation() {
+        List<Utilisateur> transporteurs = utilisateurRepository.findByRole(Role.TRANSPORTEUR);
+        return ResponseEntity.ok(transporteurs);
+    }
     // ==================== AGRICULTEURS ====================
 
     @PostMapping("/agriculteurs")
