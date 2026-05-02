@@ -23,6 +23,9 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     List<Tournee> findByVergerId(String vergerId);
     List<Tournee> findByCollecteId(String collecteId);
 
+    // TourneeRepository.java - Add this method
+    @Query(value = "{}", fields = "{'code': 1, 'statut': 1, 'dateDebut': 1, 'dateFin': 1, 'dateCreation': 1, 'quantiteCollecteeKg': 1, 'distanceTotale': 1, 'observations': 1, 'livraisonDestinationNom': 1, 'livraisonDestinationAdresse': 1}")
+    List<Tournee> findAllMinimal();
     @Query("{ 'statut': { $in: ['PLANIFIEE', 'EN_COURS'] } }")
     List<Tournee> findActive();
     // Ajoutez cette méthode
@@ -36,7 +39,7 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     // ✅ FIXED CONFLICT QUERY FOR BENNE
     @Query("{ " +
             "  'benne.id': ?0, " +
-            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS'] }, " +
+            "  'statut': { $in: ['PLANIFIEE', 'EN_COURS',] }, " +
             "  '_id': { $ne: ?3 }, " +
             "  $or: [ " +
             "    { $and: [ { 'dateDebut': { $lt: ?2 } }, { 'dateFin': { $gt: ?1 } } ] }, " +
@@ -93,15 +96,14 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     List<Tournee> findByVergerIdAndDateDebutBetween(String vergerId, Date debut, Date fin);
     @Query("{ 'verger': { $oid: ?0 }, 'travailleurs': { $in: [ObjectId(?1)] }, 'dateDebut': { $gte: ?2, $lte: ?3 } }")
     List<Tournee> findByVergerIdAndTravailleurIdAndDateDebutBetween(
-            String vergerId,
-            String travailleurId,
-            Date debut,
-            Date fin
+        String vergerId,
+        String travailleurId,
+        Date debut,
+        Date fin
     );
     @Query("{ 'travailleurs': { $in: [ObjectId(?0)] }, 'dateDebut': { $gte: ?1, $lte: ?2 } }")
     List<Tournee> findByTravailleurIdAndDateDebutBetween(String travailleurId, Date debut, Date fin);
-    @Query(value = "{}", fields = "{'code': 1, 'statut': 1, 'dateDebut': 1, 'dateFin': 1, 'dateCreation': 1, 'quantiteCollecteeKg': 1, 'distanceTotale': 1, 'observations': 1, 'livraisonDestinationNom': 1, 'livraisonDestinationAdresse': 1}")
-    List<Tournee> findAllMinimal();
+
     // ✅ FIXED CONFLICT QUERY FOR TRAVAILLEUR
     @Query("{ " +
             "  'travailleurs': { $in: [ObjectId(?0)] }, " +

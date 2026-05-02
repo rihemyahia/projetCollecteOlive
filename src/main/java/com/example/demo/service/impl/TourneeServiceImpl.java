@@ -10,8 +10,8 @@ import com.example.demo.repository.*;
 import com.example.demo.service.TourneeService;
 import com.example.demo.service.CollecteService;
 import com.example.demo.service.VergerService;
+import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,17 +40,19 @@ public class TourneeServiceImpl implements TourneeService {
     private final CollecteService collecteService;
     private final VergerService vergerService;
 
+    // Simple in-memory cache
+    private final Map<String, List<TourneeResponse>> cache = new ConcurrentHashMap<>();
+    private long lastCacheTime = 0;
+    private static final long CACHE_DURATION = 30000; // 30 seconds
 
     private static final String NO_EXCLUDE = "000000000000000000000000";
 
-    // ========== MÉTHODES UTILITAIRES POUR LA GESTION DES DROITS ==========
+    // ========== MÉTHODES UTILITAIRES ==========
 
     private boolean isAdmin(UserDetails currentUser) {
         return currentUser.getAuthorities().stream()
                 .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
     }
-
-
 
     private Utilisateur getCurrentUserEntity(UserDetails currentUser) {
         return utilisateurRepo.findByEmail(currentUser.getUsername())
@@ -57,14 +60,10 @@ public class TourneeServiceImpl implements TourneeService {
     }
 
     private void checkResponsableAccess(String vergerId, UserDetails currentUser) {
-        if (isAdmin(currentUser)) {
-            return; // Admin a accès à tout
-        }
+        if (isAdmin(currentUser)) return;
 
-        // Pour RESPONSABLE, vérifier qu'il est responsable du verger
         Verger verger = vergerRepo.findById(vergerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Verger non trouvé"));
-
         Utilisateur responsable = getCurrentUserEntity(currentUser);
 
         if (verger.getResponsable() == null ||
@@ -74,17 +73,14 @@ public class TourneeServiceImpl implements TourneeService {
     }
 
     private void checkTourneeAccess(Tournee tournee, UserDetails currentUser) {
-        if (isAdmin(currentUser)) {
-            return; // Admin a accès à tout
-        }
+        if (isAdmin(currentUser)) return;
 
         Utilisateur currentUserEntity = getCurrentUserEntity(currentUser);
 
-        // Transporteur : uniquement les tournées qui lui sont assignées
         if (currentUserEntity.getRole() == Role.TRANSPORTEUR) {
-            if (tournee.getTransporteur() != null
-                    && tournee.getTransporteur().getId() != null
-                    && tournee.getTransporteur().getId().equals(currentUserEntity.getId())) {
+            if (tournee.getTransporteur() != null &&
+                    tournee.getTransporteur().getId() != null &&
+                    tournee.getTransporteur().getId().equals(currentUserEntity.getId())) {
                 return;
             }
             throw new SecurityException("Vous n'avez pas accès à cette tournée");
@@ -110,41 +106,39 @@ public class TourneeServiceImpl implements TourneeService {
             throw new SecurityException("Vous n'avez pas accès à cette tournée");
         }
     }
-
     private List<Tournee> filterByResponsable(List<Tournee> tournees, UserDetails currentUser) {
-        if (isAdmin(currentUser)) {
-            return tournees;
-        }
+        if (isAdmin(currentUser)) return tournees;
 
         Utilisateur responsable = getCurrentUserEntity(currentUser);
+        String responsableId = responsable.getId();
+
         return tournees.stream()
-                .filter(t -> t.getVerger() != null &&
-                        t.getVerger().getResponsable() != null &&
-                        t.getVerger().getResponsable().getId().equals(responsable.getId()))
+                .filter(t -> {
+                    if (t.getVerger() == null) return false;
+                    Utilisateur vergerResponsable = t.getVerger().getResponsable();
+                    if (vergerResponsable == null) return false;
+                    String vergerResponsableId = vergerResponsable.getId();
+                    if (vergerResponsableId == null) return false;
+                    return vergerResponsableId.equals(responsableId);
+                })
                 .collect(Collectors.toList());
     }
-
     // ========== CREATE ==========
 
     @Override
     public TourneeResponse creer(TourneeRequest req, UserDetails currentUser) {
-        // Vérifier que le responsable a accès au verger
         checkResponsableAccess(req.getVergerId(), currentUser);
+        clearCache();
         return creerInterne(req);
     }
 
     private TourneeResponse creerInterne(TourneeRequest req) {
         System.out.println("🚀 === DÉBUT CRÉATION TOURNÉE ===");
 
-        // DON'T modify timezone - use dates as-is
         Date dateDebut = req.getDateDebut();
         Date dateFin = req.getDateFin();
-
         validateDates(dateDebut, dateFin);
 
-        System.out.println("🕒 Dates → Début: " + fmt(dateDebut) + " | Fin: " + fmt(dateFin));
-
-        // Resolve verger
         Verger verger = vergerRepo.findById(req.getVergerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Verger introuvable : " + req.getVergerId()));
 
@@ -157,15 +151,16 @@ public class TourneeServiceImpl implements TourneeService {
         if (benne.getType() != TypeRessource.BENNE)
             throw new IllegalArgumentException(req.getBenneId() + " n'est pas une benne.");
         checkBenneDisponible(benne, dateDebut, dateFin, NO_EXCLUDE);
-        System.out.println("✅ Benne disponible: " + benne.getNom());
+        benne.setStatut("OCCUPE");
+        ressourceRepo.save(benne);  // ✅ ADD THIS - Save the change!
 
         // === TRACTEUR CHECK ===
         Ressource tracteur = ressourceRepo.findById(req.getTracteurId())
                 .orElseThrow(() -> new ResourceNotFoundException("Tracteur introuvable : " + req.getTracteurId()));
         if (tracteur.getType() != TypeRessource.TRACTEUR)
+
             throw new IllegalArgumentException(req.getTracteurId() + " n'est pas un tracteur.");
         checkTracteurDisponible(tracteur, dateDebut, dateFin, NO_EXCLUDE);
-        System.out.println("✅ Tracteur disponible: " + tracteur.getNom());
 
         // === TRAVAILLEURS CHECK ===
         if (req.getTravailleurIds() == null || req.getTravailleurIds().isEmpty())
@@ -177,7 +172,6 @@ public class TourneeServiceImpl implements TourneeService {
                     .orElseThrow(() -> new ResourceNotFoundException("Travailleur introuvable : " + tid));
             checkTravailleurDisponible(t, dateDebut, dateFin, NO_EXCLUDE);
             travailleurs.add(t);
-            System.out.println("✅ Travailleur disponible: " + t.getPrenom() + " " + t.getNom());
         }
 
         Utilisateur responsablePressoir = resolveResponsablePressoir(req.getResponsablePressoirId());
@@ -194,7 +188,6 @@ public class TourneeServiceImpl implements TourneeService {
 
         int nbreArbre = (req.getNbreArbre() != null && req.getNbreArbre() > 0)
                 ? req.getNbreArbre() : Tournee.NB_ARBRES_PAR_TOURNEE;
-
         verifierArbresRestants(verger, nbreArbre);
 
         // Collecte management
@@ -202,6 +195,8 @@ public class TourneeServiceImpl implements TourneeService {
         Optional<Collecte> existingCollecte = collecteRepo.findByVergerIdAndAnnee(verger.getId(), annee);
         Collecte collecte = existingCollecte.orElseGet(() ->
                 collecteService.createNewCollecte(verger, annee, req.getDateDebut()));
+tracteur.setStatut("OCCUPE");
+        ressourceRepo.save(tracteur);  // ✅ ADD THIS - Save the change!
 
         if (collecte == null) {
             throw new IllegalStateException("La collecte n'a pas pu être créée");
@@ -229,7 +224,6 @@ public class TourneeServiceImpl implements TourneeService {
                 .dateCreation(new Date())
                 .build();
 
-        // Update verger status if needed
         if (verger.getStatut() == StatutVerger.NON_RECOLTE) {
             verger.setStatut(StatutVerger.EN_COURS);
             vergerRepo.save(verger);
@@ -239,7 +233,6 @@ public class TourneeServiceImpl implements TourneeService {
         collecteService.updateCollecteStats(collecte.getId());
         vergerService.recomputeStatutForVerger(verger.getId());
 
-        System.out.println("✅ Tournée créée avec succès: " + saved.getCode());
         return toResponse(saved);
     }
 
@@ -257,50 +250,55 @@ public class TourneeServiceImpl implements TourneeService {
         return findOrThrow(id);
     }
 
+// Add these methods to TourneeServiceImpl.java (after the validateDates method or before getAll)
+
+    private Date getStartOfYear(int year) {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.YEAR, year);
+        cal.set(Calendar.MONTH, Calendar.JANUARY);
+        cal.set(Calendar.DAY_OF_MONTH, 1);
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
+    }
+
+    private Date getEndOfYear(int year) {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.YEAR, year);
+        cal.set(Calendar.MONTH, Calendar.DECEMBER);
+        cal.set(Calendar.DAY_OF_MONTH, 31);
+        cal.set(Calendar.HOUR_OF_DAY, 23);
+        cal.set(Calendar.MINUTE, 59);
+        cal.set(Calendar.SECOND, 59);
+        cal.set(Calendar.MILLISECOND, 999);
+        return cal.getTime();
+    }
     @Override
     public List<TourneeResponse> getAll(UserDetails currentUser) {
-        long start = System.currentTimeMillis();
+        // Get current year
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        Date startOfYear = getStartOfYear(currentYear);
+        Date endOfYear = getEndOfYear(currentYear);
 
-        String cacheKey = "tournees_minimal_" + (isAdmin(currentUser) ? "admin" : getCurrentUserEntity(currentUser).getId());
+        List<Tournee> tournees = tourneeRepo.findByDateDebutBetween(startOfYear, endOfYear);
 
-
-        System.out.println("🔍 getAll() minimal started");
-
-        // Use the minimal query that only fetches needed fields - NO lazy loading!
-        List<Tournee> tournees = tourneeRepo.findAllMinimal();
-        System.out.println("📊 DB query took: " + (System.currentTimeMillis() - start) + "ms - Found " + tournees.size() + " records");
-
-        long filterStart = System.currentTimeMillis();
-        List<Tournee> filtered = filterByResponsable(tournees, currentUser);
-        System.out.println("🔒 Filter by responsable took: " + (System.currentTimeMillis() - filterStart) + "ms");
-
-        long mapStart = System.currentTimeMillis();
-
-        // ⚠️ CRITICAL: Do NOT call any getters that access referenced documents!
-        List<TourneeResponse> result = filtered.stream()
-                .map(t -> TourneeResponse.builder()
-                        .id(t.getId())
-                        .code(t.getCode())
-                        .statut(t.getStatut())
-                        .dateDebut(t.getDateDebut())
-                        .dateFin(t.getDateFin())
-                        .dateCreation(t.getDateCreation())
-                        .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
-                        .distanceTotale(t.getDistanceTotale())
-                        .observations(t.getObservations())
-                        .livraisonDestinationNom(t.getLivraisonDestinationNom())
-                        .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
-                        // ⚠️ DO NOT call t.getVerger() - it triggers lazy loading!
-                        .vergerId(null)
-                        .benneId(null)
-                        .tracteurId(null)
-                        .build())
+        return filterByResponsable(tournees, currentUser).stream()
+                .map(this::toResponse)
                 .collect(Collectors.toList());
 
         System.out.println("🔄 Minimal mapping took: " + (System.currentTimeMillis() - mapStart) + "ms");
         System.out.println("✅ getAll() minimal total: " + (System.currentTimeMillis() - start) + "ms");
 
         return result;
+    }
+
+
+    private void clearCache() {
+        cache.clear();
+        lastCacheTime = 0;
+        System.out.println("🗑️ Cache cleared");
     }
 
     @Override
@@ -333,6 +331,7 @@ public class TourneeServiceImpl implements TourneeService {
     public TourneeResponse demarrer(String id, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
         checkTourneeAccess(tournee, currentUser);
+        clearCache();
         return demarrerInterne(id);
     }
 
@@ -361,6 +360,7 @@ public class TourneeServiceImpl implements TourneeService {
     public TourneeResponse terminer(String id, TerminerTourneeRequest req, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
         checkTourneeAccess(tournee, currentUser);
+        clearCache();
         return terminerInterne(id, req);
     }
 
@@ -368,7 +368,6 @@ public class TourneeServiceImpl implements TourneeService {
         Tournee tournee = findOrThrow(id);
         if (tournee.getStatut() != StatutTournee.EN_COURS)
             throw new IllegalStateException("Seule une tournée EN_COURS peut être terminée.");
-
 
         tournee.setStatut(StatutTournee.TERMINEE);
         tournee.setQuantiteCollecteeKg(req.getQuantiteCollecteeKg());
@@ -381,7 +380,6 @@ public class TourneeServiceImpl implements TourneeService {
         if (tournee.getDateDebut() != null && tournee.getDateFin() != null) {
             long diffMs = tournee.getDateFin().getTime() - tournee.getDateDebut().getTime();
             tournee.setTempsTotal((int) (diffMs / 1000));
-            System.out.println("⏱️ Planned duration: " + tournee.getTempsTotal() + " seconds");
         }
 
         if (tournee.getBenne() != null) {
@@ -412,63 +410,54 @@ public class TourneeServiceImpl implements TourneeService {
     public TourneeResponse annuler(String id, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
         checkTourneeAccess(tournee, currentUser);
+        clearCache();
         return annulerInterne(id);
     }
+
     private TourneeResponse annulerInterne(String id) {
         Tournee tournee = findOrThrow(id);
 
-        // Cannot cancel tournées that are already finished or in delivery
-        if (tournee.getStatut() == StatutTournee.TERMINEE) {
-            throw new IllegalStateException("Une tournée TERMINÉE ne peut pas être annulée.");
-        }
-        if (tournee.getStatut() == StatutTournee.EN_LIVRAISON) {
-            throw new IllegalStateException("Une tournée EN LIVRAISON ne peut pas être annulée.");
-        }
-        if (tournee.getStatut() == StatutTournee.LIVREE) {
-            throw new IllegalStateException("Une tournée LIVRÉE ne peut pas être annulée.");
+        if (tournee.getStatut() == StatutTournee.TERMINEE ||
+                tournee.getStatut() == StatutTournee.EN_LIVRAISON ||
+                tournee.getStatut() == StatutTournee.LIVREE) {
+            throw new IllegalStateException("Cette tournée ne peut pas être annulée.");
         }
 
-        // Set status to cancelled
         tournee.setStatut(StatutTournee.ANNULEE);
         tournee.setCollecteFinalisee(false);
-
         Tournee saved = tourneeRepo.save(tournee);
 
-        // Recompute verger status for the associated verger
         if (saved.getVerger() != null && saved.getVerger().getId() != null) {
             vergerService.recomputeStatutForVerger(saved.getVerger().getId());
         }
-
         return toResponse(saved);
     }
+
     // ========== UPDATE / DELETE ==========
 
     @Override
     public TourneeResponse mettreAJour(String id, TourneeRequest req, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
         checkTourneeAccess(tournee, currentUser);
+        clearCache();
         return mettreAJourInterne(id, req, currentUser);
     }
 
     private TourneeResponse mettreAJourInterne(String id, TourneeRequest req, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
 
-        // ========== STATUS CHECKS ==========
         if (tournee.getStatut() == StatutTournee.EN_LIVRAISON || tournee.getStatut() == StatutTournee.LIVREE) {
-            throw new IllegalStateException("Cette tournée ne peut pas être modifiée car elle est en livraison ou déjà livrée.");
+            throw new IllegalStateException("Cette tournée ne peut pas être modifiée.");
         }
 
         if (tournee.getStatut() != StatutTournee.PLANIFIEE) {
             throw new IllegalStateException("Seule une tournée PLANIFIÉE peut être modifiée.");
         }
 
-        // ========== DATE VALIDATION ==========
         Date newDebut = req.getDateDebut() != null ? req.getDateDebut() : tournee.getDateDebut();
         Date newFin = req.getDateFin() != null ? req.getDateFin() : tournee.getDateFin();
-
         validateDates(newDebut, newFin);
 
-        // ========== CHECK IF DATES HAVE CHANGED ==========
         boolean datesChanged = !newDebut.equals(tournee.getDateDebut()) || !newFin.equals(tournee.getDateFin());
 
         if (datesChanged) {
@@ -485,7 +474,6 @@ public class TourneeServiceImpl implements TourneeService {
             }
         }
 
-        // ========== UPDATE FIELDS ==========
         tournee.setDateDebut(newDebut);
         tournee.setDateFin(newFin);
 
@@ -496,9 +484,8 @@ public class TourneeServiceImpl implements TourneeService {
             tournee.setNbreArbre(req.getNbreArbre());
         }
 
-        if (req.getDistanceTotale() != null) {
-            tournee.setDistanceTotale(req.getDistanceTotale());
-        }
+        if (req.getDistanceTotale() != null) tournee.setDistanceTotale(req.getDistanceTotale());
+        if (req.getObservations() != null) tournee.setObservations(req.getObservations());
 
         if (req.getObservations() != null) {
             tournee.setObservations(req.getObservations());
@@ -560,17 +547,18 @@ public class TourneeServiceImpl implements TourneeService {
 
         Tournee saved = tourneeRepo.save(tournee);
 
-        // Recompute verger status if needed
         if (saved.getVerger() != null && saved.getVerger().getId() != null) {
             vergerService.recomputeStatutForVerger(saved.getVerger().getId());
         }
 
         return toResponse(saved);
     }
+
     @Override
     public void supprimer(String id, UserDetails currentUser) {
         Tournee tournee = findOrThrow(id);
         checkTourneeAccess(tournee, currentUser);
+        clearCache();
         supprimerInterne(id);
     }
 
@@ -602,20 +590,15 @@ public class TourneeServiceImpl implements TourneeService {
     @Override
     public int calculerNbTourneesNecessaires(String vergerId, UserDetails currentUser) {
         checkResponsableAccess(vergerId, currentUser);
-        return calculerNbTourneesNecessairesInterne(vergerId);
-    }
-
-    private int calculerNbTourneesNecessairesInterne(String vergerId) {
         Verger verger = vergerRepo.findById(vergerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Verger introuvable : " + vergerId));
         return (int) Math.ceil((double) verger.getNbArbre() / Tournee.NB_ARBRES_PAR_TOURNEE);
     }
 
-    // ========== AVAILABILITY CHECKS (CONSERVÉES INTACTES) ==========
+    // ========== AVAILABILITY CHECKS ==========
 
     private void checkBenneDisponible(Ressource benne, Date debut, Date fin, String excludeId) {
         List<Tournee> conflicts = tourneeRepo.findConflictsByBenne(benne.getId(), debut, fin, excludeId);
-        System.out.println("🔍 Checking benne conflicts: " + benne.getNom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
             Tournee c = conflicts.get(0);
             throw new IllegalStateException("La benne « " + benne.getNom() + " » est déjà utilisée du "
@@ -625,7 +608,6 @@ public class TourneeServiceImpl implements TourneeService {
 
     private void checkTracteurDisponible(Ressource tracteur, Date debut, Date fin, String excludeId) {
         List<Tournee> conflicts = tourneeRepo.findConflictsByTracteur(tracteur.getId(), debut, fin, excludeId);
-        System.out.println("🔍 Checking tracteur conflicts: " + tracteur.getNom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
             Tournee c = conflicts.get(0);
             throw new IllegalStateException("Le tracteur « " + tracteur.getNom() + " » est déjà utilisé du "
@@ -635,7 +617,6 @@ public class TourneeServiceImpl implements TourneeService {
 
     private void checkTravailleurDisponible(Utilisateur travailleur, Date debut, Date fin, String excludeId) {
         List<Tournee> conflicts = tourneeRepo.findConflictsByTravailleur(travailleur.getId(), debut, fin, excludeId);
-        System.out.println("🔍 Checking travailleur conflicts: " + travailleur.getPrenom() + " - found: " + conflicts.size());
         if (!conflicts.isEmpty()) {
             Tournee c = conflicts.get(0);
             throw new IllegalStateException("Le travailleur « " + travailleur.getPrenom() + " " + travailleur.getNom()
@@ -644,6 +625,7 @@ public class TourneeServiceImpl implements TourneeService {
         }
     }
 
+    // ========== MÉTHODES UTILITAIRES ==========
     // ========== MÉTHODES UTILITAIRES (CONSERVÉES INTACTES) ==========
 
     private Utilisateur resolveResponsablePressoir(String responsablePressoirId) {
@@ -734,6 +716,9 @@ public class TourneeServiceImpl implements TourneeService {
 
     @Autowired
     private UtilisateurRepository userRep;
+    @Autowired
+    private UtilisateurRepository userRep;
+
     @Override
     public Optional<List<Utilisateur>> getAllTravailleurs() {
         List<Utilisateur> travailleurs = userRep.findByRoleAndEstSupprimeFalse("TRAVAILLEUR");
@@ -803,48 +788,91 @@ public class TourneeServiceImpl implements TourneeService {
                 .collecteCode(null)
                 .build();
     }
-
+    
     private TourneeResponse toResponse(Tournee t) {
+        // Extract nested data safely
         Verger v = t.getVerger();
-        String vergerTypeOlive = null, vergerAgriculteurNom = null;
+        String vergerTypeOlive = null;
+        String vergerAgriculteurNom = null;
         Double vergerSuperficie = null;
+        String vergerId = null;
 
         if (v != null) {
+            vergerId = v.getId();
             vergerTypeOlive = v.getTypeOlive();
             vergerSuperficie = v.getSuperficie();
-            if (v.getAgriculteur() != null)
+            if (v.getAgriculteur() != null) {
                 vergerAgriculteurNom = v.getAgriculteur().getPrenom() + " " + v.getAgriculteur().getNom();
+            }
         }
 
+        // Extract benne data
         Ressource benne = t.getBenne();
+        String benneId = null;
+        String benneNom = null;
+        Double benneCapaciteKg = null;
+        if (benne != null) {
+            benneId = benne.getId();
+            benneNom = benne.getNom();
+            benneCapaciteKg = benne.getCapaciteKg();
+        }
         Ressource tracteur = t.getTracteur();
         Utilisateur responsablePressoir = t.getResponsablePressoir();
 
+        // Extract tracteur data
+        String tracteurId = null;
+        String tracteurNom = null;
+        String tracteurImmatriculation = null;
+        if (tracteur != null) {
+            tracteurId = tracteur.getId();
+            tracteurNom = tracteur.getNom();
+            tracteurImmatriculation = tracteur.getImmatriculation();
+        }
+
+        // Extract workers data
         List<String> travailleurIds = new ArrayList<>();
         List<String> travailleurNoms = new ArrayList<>();
         if (t.getTravailleurs() != null) {
             for (Utilisateur u : t.getTravailleurs()) {
-                travailleurIds.add(u.getId());
-                travailleurNoms.add(u.getPrenom() + " " + u.getNom());
+                if (u != null) {
+                    travailleurIds.add(u.getId());
+                    travailleurNoms.add(u.getPrenom() + " " + u.getNom());
+                }
             }
         }
 
-        Double totalVerger = (v != null) ? getTotalCollecteParVergerInterne(v.getId()) : null;
+        // Extract collecte data
+        Collecte collecte = t.getCollecte();
+        String collecteId = null;
+        String collecteCode = null;
+        if (collecte != null) {
+            collecteId = collecte.getId();
+            collecteCode = collecte.getCode();
+        }
+
+        // Calculate efficiency if needed
+        Double efficacite = null;
+        if (t.getDistanceTotale() != null && t.getDistanceTotale() > 0
+                && t.getQuantiteCollecteeKg() != null && t.getQuantiteCollecteeKg() > 0
+                && t.getTempsTotal() != null && t.getTempsTotal() > 0) {
+            double heures = t.getTempsTotal() / 3600.0;
+            efficacite = Math.min((t.getQuantiteCollecteeKg() / (t.getDistanceTotale() * heures)) * 10.0, 100.0);
+        }
 
         return TourneeResponse.builder()
                 .id(t.getId())
                 .code(t.getCode())
                 .statut(t.getStatut())
-                .vergerId(v != null ? v.getId() : null)
+                .vergerId(vergerId)
                 .vergerTypeOlive(vergerTypeOlive)
                 .vergerAgriculteurNom(vergerAgriculteurNom)
                 .vergerSuperficie(vergerSuperficie)
-                .benneId(benne != null ? benne.getId() : null)
-                .benneNom(benne != null ? benne.getNom() : null)
-                .benneCapaciteKg(benne != null ? benne.getCapaciteKg() : null)
-                .tracteurId(tracteur != null ? tracteur.getId() : null)
-                .tracteurNom(tracteur != null ? tracteur.getNom() : null)
-                .tracteurImmatriculation(tracteur != null ? tracteur.getImmatriculation() : null)
+                .benneId(benneId)
+                .benneNom(benneNom)
+                .benneCapaciteKg(benneCapaciteKg)
+                .tracteurId(tracteurId)
+                .tracteurNom(tracteurNom)
+                .tracteurImmatriculation(tracteurImmatriculation)
                 .travailleurIds(travailleurIds)
                 .travailleurNoms(travailleurNoms)
                 .nbreArbre(t.getNbreArbre())
@@ -852,7 +880,7 @@ public class TourneeServiceImpl implements TourneeService {
                 .tempsTotal(t.getTempsTotal())
                 .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
                 .collecteFinalisee(t.getCollecteFinalisee())
-                .efficacite(calculerEfficacite(t))
+                .efficacite(efficacite)
                 .observations(t.getObservations())
                 .livraisonDestinationNom(t.getLivraisonDestinationNom())
                 .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
@@ -872,9 +900,8 @@ public class TourneeServiceImpl implements TourneeService {
                 .dateDebut(t.getDateDebut())
                 .dateFin(t.getDateFin())
                 .dateCreation(t.getDateCreation())
-                .totalCollecteVergerKg(totalVerger)
-                .collecteId(t.getCollecte() != null ? t.getCollecte().getId() : null)
-                .collecteCode(t.getCollecte() != null ? t.getCollecte().getCode() : null)
+                .collecteId(collecteId)
+                .collecteCode(collecteCode)
                 .build();
     }
 }
