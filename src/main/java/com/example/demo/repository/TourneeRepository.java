@@ -53,6 +53,10 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
         Page<Tournee> findByStatutInAndTransporteurIsNull(List<StatutTournee> statuses, Pageable pageable);
     @Query("{ 'transporteur.id': ?0 }")
     List<Tournee> findByTransporteurId(String transporteurId, Sort sort);
+    @Query("{ 'responsablePressoir.id': ?0 }")
+    List<Tournee> findByResponsablePressoirId(String responsablePressoirId, Sort sort);
+    @Query("{ 'responsablePressoir.id': ?0, 'statut': ?1 }")
+    List<Tournee> findByResponsablePressoirIdAndStatut(String responsablePressoirId, StatutTournee statut, Sort sort);
     @Query("{ 'transporteur.id': ?0, 'statut': ?1 }")
     List<Tournee> findByTransporteurIdAndStatut(String transporteurId, StatutTournee statut, Sort sort);
     // ✅ FIXED CONFLICT QUERY FOR TRACTEUR
