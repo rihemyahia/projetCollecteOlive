@@ -22,7 +22,9 @@ public interface TourneeRepository extends MongoRepository<Tournee, String> {
     List<Tournee> findByStatut(StatutTournee statut);
     List<Tournee> findByVergerId(String vergerId);
     List<Tournee> findByCollecteId(String collecteId);
-
+    // TourneeRepository.java - Add this method
+    @Query(value = "{}", fields = "{'code': 1, 'statut': 1, 'dateDebut': 1, 'dateFin': 1, 'dateCreation': 1, 'quantiteCollecteeKg': 1, 'distanceTotale': 1, 'observations': 1, 'livraisonDestinationNom': 1, 'livraisonDestinationAdresse': 1}")
+    List<Tournee> findAllMinimal();
     @Query("{ 'statut': { $in: ['PLANIFIEE', 'EN_COURS'] } }")
     List<Tournee> findActive();
  // Ajoutez cette méthode
