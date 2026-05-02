@@ -77,6 +77,22 @@ public class TourneeServiceImpl implements TourneeService {
                     return ok;
                 })
                 .filter(t -> {
+                    // Try to get the transporteur ID - if it fails or is null, treat as no transporteur
+                    boolean hasTransporteur = false;
+                    try {
+                        Utilisateur transporter = t.getTransporteur();
+                        if (transporter != null) {
+                            String id = transporter.getId();
+                            hasTransporteur = (id != null && !id.isEmpty());
+                        }
+                    } catch (Exception e) {
+                        // Lazy loading exception - treat as no transporteur
+                        hasTransporteur = false;
+                    }
+                    if (hasTransporteur) System.out.println("  ❌ SKIP " + t.getCode() + " - has transporteur");
+                    return !hasTransporteur;
+                })
+                .filter(t -> {
                     // Use vergerSnapshot instead of getVerger() to avoid lazy loading issues
                     Verger v = t.getVergerSnapshot();
                     boolean ok = v != null && (vergerIds == null || vergerIds.isEmpty() || vergerIds.contains(v.getId()));

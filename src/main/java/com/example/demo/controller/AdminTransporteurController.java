@@ -162,8 +162,7 @@ public class AdminTransporteurController {
         // Include EN_LIVRAISON so admin UI can show active delivery and compute date conflicts.
         // Exclude only finished / cancelled (reassignment irrelevant).
         List<Tournee> forPanel = assignees.stream()
-                .filter(t -> t.getStatut() != StatutTournee.LIVREE
-                        && t.getStatut() != StatutTournee.ANNULEE)
+                .filter(t -> t.getStatut() != StatutTournee.ANNULEE)
                 .collect(java.util.stream.Collectors.toList());
 
         System.out.println("[DEBUG] Filtered from " + assignees.size() + " to " + forPanel.size() + " tournees (panel)");
