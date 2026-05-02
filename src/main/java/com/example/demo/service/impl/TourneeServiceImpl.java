@@ -109,22 +109,50 @@ public class TourneeServiceImpl implements TourneeService {
     private List<Tournee> filterByResponsable(List<Tournee> tournees, UserDetails currentUser) {
         if (isAdmin(currentUser)) return tournees;
 
-        Utilisateur responsable = getCurrentUserEntity(currentUser);
-        String responsableId = responsable.getId();
+        Utilisateur currentUserEntity = getCurrentUserEntity(currentUser);
+        String responsableId = currentUserEntity.getId();
 
-        return tournees.stream()
-                .filter(t -> {
-                    if (t.getVerger() == null) return false;
-                    Utilisateur vergerResponsable = t.getVerger().getResponsable();
-                    if (vergerResponsable == null) return false;
-                    String vergerResponsableId = vergerResponsable.getId();
-                    if (vergerResponsableId == null) return false;
-                    return vergerResponsableId.equals(responsableId);
-                })
-                .collect(Collectors.toList());
+        // For RESPONSABLE_PRESSOIR
+        if (currentUserEntity.getRole() == Role.RESPONSABLE_PRESSOIR) {
+            return tournees.stream()
+                    .filter(t -> {
+                        if (t.getResponsablePressoir() == null) return false;
+                        String pressoirResponsableId = t.getResponsablePressoir().getId();
+                        if (pressoirResponsableId == null) return false;
+                        return pressoirResponsableId.equals(responsableId);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // For regular RESPONSABLE (manager of verger)
+        if (currentUserEntity.getRole() == Role.RESPONSABLE) {
+            return tournees.stream()
+                    .filter(t -> {
+                        if (t.getVerger() == null) return false;
+                        Utilisateur vergerResponsable = t.getVerger().getResponsable();
+                        if (vergerResponsable == null) return false;
+                        String vergerResponsableId = vergerResponsable.getId();
+                        if (vergerResponsableId == null) return false;
+                        return vergerResponsableId.equals(responsableId);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // For TRANSPORTEUR
+        if (currentUserEntity.getRole() == Role.TRANSPORTEUR) {
+            return tournees.stream()
+                    .filter(t -> {
+                        if (t.getTransporteur() == null) return false;
+                        String transporteurId = t.getTransporteur().getId();
+                        if (transporteurId == null) return false;
+                        return transporteurId.equals(responsableId);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // For other roles, return empty list
+        return Collections.emptyList();
     }
-    // ========== CREATE ==========
-
     @Override
     public TourneeResponse creer(TourneeRequest req, UserDetails currentUser) {
         checkResponsableAccess(req.getVergerId(), currentUser);
@@ -195,7 +223,7 @@ public class TourneeServiceImpl implements TourneeService {
         Optional<Collecte> existingCollecte = collecteRepo.findByVergerIdAndAnnee(verger.getId(), annee);
         Collecte collecte = existingCollecte.orElseGet(() ->
                 collecteService.createNewCollecte(verger, annee, req.getDateDebut()));
-tracteur.setStatut("OCCUPE");
+        tracteur.setStatut("OCCUPE");
         ressourceRepo.save(tracteur);  // ✅ ADD THIS - Save the change!
 
         if (collecte == null) {
@@ -275,26 +303,51 @@ tracteur.setStatut("OCCUPE");
         cal.set(Calendar.MILLISECOND, 999);
         return cal.getTime();
     }
+    // Add this method - returns minimal data for list view
+    private TourneeResponse toResponseLight(Tournee t) {
+        // ONLY use simple getters - NO nested object access
+        return TourneeResponse.builder()
+                .id(t.getId())
+                .code(t.getCode())
+                .statut(t.getStatut())
+                .dateDebut(t.getDateDebut())
+                .dateFin(t.getDateFin())
+                .dateCreation(t.getDateCreation())
+                .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
+                .distanceTotale(t.getDistanceTotale())
+                .observations(t.getObservations())
+                .livraisonDestinationNom(t.getLivraisonDestinationNom())
+                .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                // Leave everything else null for list view
+                .build();
+    }
+
+    // Replace the getAll method
     @Override
     public List<TourneeResponse> getAll(UserDetails currentUser) {
-        // Get current year
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-        Date startOfYear = getStartOfYear(currentYear);
-        Date endOfYear = getEndOfYear(currentYear);
+        long start = System.currentTimeMillis();
+        System.out.println("🔍 getAll() started for user: " + currentUser.getUsername());
 
-        List<Tournee> tournees = tourneeRepo.findByDateDebutBetween(startOfYear, endOfYear);
+        // Get all tournees
+        List<Tournee> tournees = tourneeRepo.findAll();
+        System.out.println("📊 Total tournees in DB: " + tournees.size());
 
-        return filterByResponsable(tournees, currentUser).stream()
-                .map(this::toResponse)
+        // ✅ THIS WILL NOW FILTER FOR RESPONSABLE
+        List<Tournee> filteredTournees = filterByResponsable(tournees, currentUser);
+        System.out.println("🔒 After filtering: " + filteredTournees.size() + " tournees accessible");
+
+        long mapStart = System.currentTimeMillis();
+
+        // Map to response
+        List<TourneeResponse> result = filteredTournees.stream()
+                .map(this::toResponseLight)
                 .collect(Collectors.toList());
 
-        System.out.println("🔄 Minimal mapping took: " + (System.currentTimeMillis() - mapStart) + "ms");
-        System.out.println("✅ getAll() minimal total: " + (System.currentTimeMillis() - start) + "ms");
+        System.out.println("🔄 Mapping took: " + (System.currentTimeMillis() - mapStart) + "ms");
+        System.out.println("✅ getAll() total: " + (System.currentTimeMillis() - start) + "ms");
 
         return result;
     }
-
-
     private void clearCache() {
         cache.clear();
         lastCacheTime = 0;
@@ -717,7 +770,6 @@ tracteur.setStatut("OCCUPE");
     @Autowired
     private UtilisateurRepository userRep;
     @Autowired
-    private UtilisateurRepository userRep;
 
     @Override
     public Optional<List<Utilisateur>> getAllTravailleurs() {
@@ -788,7 +840,7 @@ tracteur.setStatut("OCCUPE");
                 .collecteCode(null)
                 .build();
     }
-    
+
     private TourneeResponse toResponse(Tournee t) {
         // Extract nested data safely
         Verger v = t.getVerger();
