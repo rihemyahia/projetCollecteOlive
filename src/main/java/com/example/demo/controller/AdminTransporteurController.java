@@ -95,7 +95,6 @@ public class AdminTransporteurController {
         List<Utilisateur> transporteurs = utilisateurRepository.findByRole(Role.TRANSPORTEUR);
         return ResponseEntity.ok(transporteurs);
     }
-
     @GetMapping("/tournees-disponibles")
     public ResponseEntity<Map<String, Object>> getTourneesDisponibles(
             @RequestParam(defaultValue = "0") int page,
@@ -103,55 +102,42 @@ public class AdminTransporteurController {
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) String q
     ) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "dateDebut"));
-
-        java.util.List<StatutTournee> allowed = java.util.Arrays.stream(StatutTournee.values())
-                .filter(s -> s != StatutTournee.EN_LIVRAISON && s != StatutTournee.LIVREE && s != StatutTournee.ANNULEE)
-                .collect(java.util.stream.Collectors.toList());
-
-        Integer yearFilter;
-        if (year == null) {
-            yearFilter = Year.now().getValue();
-        } else if (year == 0) {
-            yearFilter = null;
-        } else {
-            yearFilter = year;
-        }
-
         Utilisateur actor = currentAuthenticatedUtilisateur();
-        Page<Tournee> disponibles;
-        if (actor.getRole() == Role.ADMIN) {
-            disponibles = tourneeDisponiblesQueryService.findDisponiblesAssignation(
-                    allowed, null, yearFilter, q, pageable);
-        } else if (actor.getRole() == Role.RESPONSABLE) {
+
+        List<String> vergerIds = null;
+        if (actor.getRole() == Role.RESPONSABLE) {
             List<Verger> vergers = vergerRepository.findByResponsableId(actor.getId());
-            List<String> vergerIds = vergers.stream()
+            vergerIds = vergers.stream()
                     .filter(v -> v != null && !Boolean.TRUE.equals(v.getEstSupprimer()))
                     .map(Verger::getId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
+
             if (vergerIds.isEmpty()) {
-                disponibles = Page.empty(pageable);
-            } else {
-                disponibles = tourneeDisponiblesQueryService.findDisponiblesAssignation(
-                        allowed, vergerIds, yearFilter, q, pageable);
+                Map<String, Object> emptyResponse = new HashMap<>();
+                emptyResponse.put("content", List.of());
+                emptyResponse.put("totalPages", 0);
+                emptyResponse.put("totalElements", 0);
+                emptyResponse.put("currentPage", 0);
+                return ResponseEntity.ok(emptyResponse);
             }
-        } else {
-            throw new RuntimeException("Accès réservé à l’administrateur ou au responsable terrain");
         }
 
-        List<Tournee> contentEntities = disponibles.getContent();
-        List<TourneeResponse> contentLight = contentEntities.stream()
-                .map(tourneeService::toResponseForTransporteurAssignList)
-                .collect(Collectors.toList());
-        tourneeAssignListPressoirEnricher.enrichPressoirDisplayFields(contentLight, contentEntities);
+        List<TourneeResponse> allDisponibles = tourneeService.getTourneesDisponiblesPourTransporteur(
+                vergerIds, year, q);
+
+        // Manual pagination
+        int start = page * size;
+        int end = Math.min(start + size, allDisponibles.size());
+        List<TourneeResponse> paged = start < allDisponibles.size()
+                ? allDisponibles.subList(start, end)
+                : List.of();
 
         Map<String, Object> response = new HashMap<>();
-        response.put("content", contentLight);
-        response.put("totalPages", disponibles.getTotalPages());
-        response.put("totalElements", disponibles.getTotalElements());
-        response.put("currentPage", disponibles.getNumber());
-        response.put("yearApplied", yearFilter != null ? yearFilter : 0);
+        response.put("content", paged);
+        response.put("totalPages", (int) Math.ceil((double) allDisponibles.size() / size));
+        response.put("totalElements", allDisponibles.size());
+        response.put("currentPage", page);
 
         return ResponseEntity.ok(response);
     }

@@ -47,4 +47,5 @@ public interface TourneeService {
 	 */
 	TourneeResponse toResponseForTransporteurAssignList(Tournee t);
 
+    List<TourneeResponse> getTourneesDisponiblesPourTransporteur(List<String> vergerIds, Integer year, String q);
 }

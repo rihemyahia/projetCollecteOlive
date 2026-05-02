@@ -23,6 +23,7 @@ public class Tournee {
 	// 200 trees × ~5 kg/tree avg yield = 1 000 kg → fills one standard 1-tonne
 	// benne
 	public static final int NB_ARBRES_PAR_TOURNEE = 200;
+	private Verger vergerSnapshot;  // Complete copy at creation time
 
 	@Id
 	private String id;

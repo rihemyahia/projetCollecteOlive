@@ -64,6 +64,7 @@ public class TourneeResponse {
     private Date dateDebut;
     private Date dateFin;
     private Date dateCreation;
+    private String vergerResponsableNom; // ✅ ADD THIS FIELD
 
     // Verger aggregate
     private Double totalCollecteVergerKg;  // sum of all terminated tournées of same verger

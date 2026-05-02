@@ -53,7 +53,61 @@ public class TourneeServiceImpl implements TourneeService {
         return currentUser.getAuthorities().stream()
                 .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
     }
+    @Override
+    public List<TourneeResponse> getTourneesDisponiblesPourTransporteur(
+            List<String> vergerIds,
+            Integer yearOrNull,
+            String searchQuery) {
 
+        // Get ALL tournées
+        List<Tournee> allTournees = tourneeRepo.findAll();
+
+        System.out.println("🔍 Total tournees in DB: " + allTournees.size());
+
+        List<StatutTournee> allowedStatuts = Arrays.asList(
+                StatutTournee.PLANIFIEE,
+                StatutTournee.EN_COURS,
+                StatutTournee.TERMINEE
+        );
+
+        List<Tournee> filtered = allTournees.stream()
+                .filter(t -> {
+                    boolean ok = allowedStatuts.contains(t.getStatut());
+                    if (!ok) System.out.println("  ❌ SKIP " + t.getCode() + " - statut=" + t.getStatut());
+                    return ok;
+                })
+                .filter(t -> {
+                    // Use vergerSnapshot instead of getVerger() to avoid lazy loading issues
+                    Verger v = t.getVergerSnapshot();
+                    boolean ok = v != null && (vergerIds == null || vergerIds.isEmpty() || vergerIds.contains(v.getId()));
+                    if (!ok) System.out.println("  ❌ SKIP " + t.getCode() + " - verger not in list");
+                    return ok;
+                })
+                .filter(t -> {
+                    if (yearOrNull == null || yearOrNull == 0) return true;
+                    if (t.getDateDebut() == null) return false;
+                    Calendar cal = Calendar.getInstance();
+                    cal.setTime(t.getDateDebut());
+                    boolean ok = cal.get(Calendar.YEAR) == yearOrNull;
+                    if (!ok) System.out.println("  ❌ SKIP " + t.getCode() + " - wrong year");
+                    return ok;
+                })
+                .filter(t -> {
+                    if (searchQuery == null || searchQuery.isBlank()) return true;
+                    String q = searchQuery.toLowerCase();
+                    return (t.getCode() != null && t.getCode().toLowerCase().contains(q))
+                            || (t.getLivraisonDestinationNom() != null && t.getLivraisonDestinationNom().toLowerCase().contains(q))
+                            || (t.getObservations() != null && t.getObservations().toLowerCase().contains(q));
+                })
+                .peek(t -> System.out.println("  ✅ INCLUDED: " + t.getCode() + " statut=" + t.getStatut()))
+                .collect(Collectors.toList());
+
+        System.out.println("🔍 After filtering: " + filtered.size() + " tournees");
+
+        return filtered.stream()
+                .map(this::toResponseForTransporteurAssignList)
+                .collect(Collectors.toList());
+    }
     private Utilisateur getCurrentUserEntity(UserDetails currentUser) {
         return utilisateurRepo.findByEmail(currentUser.getUsername())
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
@@ -109,22 +163,60 @@ public class TourneeServiceImpl implements TourneeService {
     private List<Tournee> filterByResponsable(List<Tournee> tournees, UserDetails currentUser) {
         if (isAdmin(currentUser)) return tournees;
 
-        Utilisateur responsable = getCurrentUserEntity(currentUser);
-        String responsableId = responsable.getId();
+        Utilisateur currentUserEntity = getCurrentUserEntity(currentUser);
+        String responsableId = currentUserEntity.getId();
 
-        return tournees.stream()
-                .filter(t -> {
-                    if (t.getVerger() == null) return false;
-                    Utilisateur vergerResponsable = t.getVerger().getResponsable();
-                    if (vergerResponsable == null) return false;
-                    String vergerResponsableId = vergerResponsable.getId();
-                    if (vergerResponsableId == null) return false;
-                    return vergerResponsableId.equals(responsableId);
-                })
-                .collect(Collectors.toList());
+        // For RESPONSABLE_PRESSOIR
+        if (currentUserEntity.getRole() == Role.RESPONSABLE_PRESSOIR) {
+            return tournees.stream()
+                    .filter(t -> {
+                        if (t.getResponsablePressoir() == null) return false;
+                        String pressoirResponsableId = t.getResponsablePressoir().getId();
+                        if (pressoirResponsableId == null) return false;
+                        return pressoirResponsableId.equals(responsableId);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // For regular RESPONSABLE (manager of verger) - USE SNAPSHOT!
+        if (currentUserEntity.getRole() == Role.RESPONSABLE) {
+            return tournees.stream()
+                    .filter(t -> {
+                        // ✅ USE VERGER SNAPSHOT instead of t.getVerger()
+                        Verger v = t.getVergerSnapshot();
+                        if (v == null) {
+                            System.out.println("⚠️ Tournee " + t.getCode() + " has no vergerSnapshot!");
+                            return false;
+                        }
+                        Utilisateur vergerResponsable = v.getResponsable();
+                        if (vergerResponsable == null) {
+                            System.out.println("⚠️ Verger " + v.getId() + " has no responsable!");
+                            return false;
+                        }
+                        String vergerResponsableId = vergerResponsable.getId();
+                        if (vergerResponsableId == null) {
+                            System.out.println("⚠️ Verger responsable has no ID!");
+                            return false;
+                        }
+                        return vergerResponsableId.equals(responsableId);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // For TRANSPORTEUR
+        if (currentUserEntity.getRole() == Role.TRANSPORTEUR) {
+            return tournees.stream()
+                    .filter(t -> {
+                        if (t.getTransporteur() == null) return false;
+                        String transporteurId = t.getTransporteur().getId();
+                        if (transporteurId == null) return false;
+                        return transporteurId.equals(responsableId);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        return Collections.emptyList();
     }
-    // ========== CREATE ==========
-
     @Override
     public TourneeResponse creer(TourneeRequest req, UserDetails currentUser) {
         checkResponsableAccess(req.getVergerId(), currentUser);
@@ -215,6 +307,8 @@ tracteur.setStatut("OCCUPE");
                 .responsablePressoirId(responsablePressoir != null ? responsablePressoir.getId() : null)
                 .nbreArbre(nbreArbre)
                 .dateDebut(dateDebut)
+                .vergerSnapshot(verger)  // ✅ Store COMPLETE copy
+
                 .dateFin(dateFin)
                 .distanceTotale(req.getDistanceTotale())
                 .observations(req.getObservations())
@@ -275,26 +369,203 @@ tracteur.setStatut("OCCUPE");
         cal.set(Calendar.MILLISECOND, 999);
         return cal.getTime();
     }
+
+    // Replace the getAll method
+// TourneeServiceImpl.java
     @Override
     public List<TourneeResponse> getAll(UserDetails currentUser) {
-        // Get current year
-        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-        Date startOfYear = getStartOfYear(currentYear);
-        Date endOfYear = getEndOfYear(currentYear);
+        long start = System.currentTimeMillis();
+        System.out.println("🔍 getAll() started for user: " + currentUser.getUsername());
 
-        List<Tournee> tournees = tourneeRepo.findByDateDebutBetween(startOfYear, endOfYear);
+        List<Tournee> tournees = tourneeRepo.findAll();
+        System.out.println("📊 DB query took: " + (System.currentTimeMillis() - start) + "ms - Found " + tournees.size() + " records");
 
-        return filterByResponsable(tournees, currentUser).stream()
-                .map(this::toResponse)
+        // Apply filtering based on user role
+        List<Tournee> filteredTournees = filterByResponsable(tournees, currentUser);
+        System.out.println("🔒 After filtering: " + filteredTournees.size() + " tournees accessible");
+
+        long mapStart = System.currentTimeMillis();
+
+        List<TourneeResponse> result = filteredTournees.stream()
+                .map(this::toResponseLight)
                 .collect(Collectors.toList());
 
-        System.out.println("🔄 Minimal mapping took: " + (System.currentTimeMillis() - mapStart) + "ms");
-        System.out.println("✅ getAll() minimal total: " + (System.currentTimeMillis() - start) + "ms");
+        System.out.println("🔄 Mapping took: " + (System.currentTimeMillis() - mapStart) + "ms");
+        System.out.println("✅ getAll() total: " + (System.currentTimeMillis() - start) + "ms");
 
         return result;
     }
 
+    private TourneeResponse toResponse(Tournee t) {
+        if (t == null) {
+            return null;
+        }
 
+        // ✅ USE THE SNAPSHOT instead of reference
+        Verger v = t.getVergerSnapshot();
+
+        String vergerTypeOlive = null;
+        String vergerAgriculteurNom = null;
+        String vergerResponsableId = null;
+        String vergerResponsableNom = null;
+        Double vergerSuperficie = null;
+        String vergerId = null;
+
+        if (v != null) {
+            vergerId = v.getId();
+            vergerTypeOlive = v.getTypeOlive();
+            vergerSuperficie = v.getSuperficie();
+
+            // ✅ CHANGED: Fetch responsable info from DB using the ID from snapshot
+            if (v.getResponsable() != null) {
+                String responsableId = v.getResponsable().getId();
+                if (responsableId != null) {
+                    try {
+                        Utilisateur responsable = utilisateurRepo.findById(responsableId).orElse(null);
+                        if (responsable != null) {
+                            vergerResponsableId = responsable.getId();
+                            vergerResponsableNom = (responsable.getPrenom() != null ? responsable.getPrenom() : "")
+                                    + " " + (responsable.getNom() != null ? responsable.getNom() : "");
+                            vergerResponsableNom = vergerResponsableNom.trim();
+                        }
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Could not fetch responsable: " + e.getMessage());
+                    }
+                }
+            }
+
+            // ✅ CHANGED: Fetch agriculteur name from DB using the ID from snapshot
+            if (v.getAgriculteur() != null) {
+                String agriculteurId = v.getAgriculteur().getId();
+                if (agriculteurId != null) {
+                    try {
+                        Utilisateur agriculteur = utilisateurRepo.findById(agriculteurId).orElse(null);
+                        if (agriculteur != null) {
+                            vergerAgriculteurNom = (agriculteur.getPrenom() != null ? agriculteur.getPrenom() : "")
+                                    + " " + (agriculteur.getNom() != null ? agriculteur.getNom() : "");
+                            vergerAgriculteurNom = vergerAgriculteurNom.trim();
+                        }
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Could not fetch agriculteur: " + e.getMessage());
+                    }
+                }
+            }
+        }
+
+        Double efficacite = calculerEfficacite(t);
+
+        // Extract benne data
+        Ressource benne = t.getBenne();
+        String benneId = null;
+        String benneNom = null;
+        Double benneCapaciteKg = null;
+        if (benne != null) {
+            benneId = benne.getId();
+            benneNom = benne.getNom();
+            benneCapaciteKg = benne.getCapaciteKg();
+        }
+
+        // Extract tracteur data
+        Ressource tracteur = t.getTracteur();
+        String tracteurId = null;
+        String tracteurNom = null;
+        String tracteurImmatriculation = null;
+        if (tracteur != null) {
+            tracteurId = tracteur.getId();
+            tracteurNom = tracteur.getNom();
+            tracteurImmatriculation = tracteur.getImmatriculation();
+        }
+
+        // Extract workers data
+        List<String> travailleurIds = new ArrayList<>();
+        List<String> travailleurNoms = new ArrayList<>();
+        if (t.getTravailleurs() != null) {
+            for (Utilisateur u : t.getTravailleurs()) {
+                if (u != null) {
+                    travailleurIds.add(u.getId());
+                    travailleurNoms.add(u.getPrenom() + " " + u.getNom());
+                }
+            }
+        }
+
+        // Extract collecte data
+        Collecte collecte = t.getCollecte();
+        String collecteId = null;
+        String collecteCode = null;
+        if (collecte != null) {
+            collecteId = collecte.getId();
+            collecteCode = collecte.getCode();
+        }
+
+        // Extract responsable pressoir
+        Utilisateur responsablePressoir = t.getResponsablePressoir();
+        String responsablePressoirNom = null;
+        String pressoirNom = null;
+        String pressoirAdresse = null;
+        if (responsablePressoir != null) {
+            responsablePressoirNom = (responsablePressoir.getPrenom() != null ? responsablePressoir.getPrenom() : "")
+                    + " " + (responsablePressoir.getNom() != null ? responsablePressoir.getNom() : "");
+            responsablePressoirNom = responsablePressoirNom.trim();
+
+            if (responsablePressoir.getPressoir() != null) {
+                pressoirNom = responsablePressoir.getPressoir().getNom();
+                pressoirAdresse = responsablePressoir.getPressoir().getAdresse();
+            }
+        }
+
+        // Calculate efficiency if needed
+        if (t.getDistanceTotale() != null && t.getDistanceTotale() > 0
+                && t.getQuantiteCollecteeKg() != null && t.getQuantiteCollecteeKg() > 0
+                && t.getTempsTotal() != null && t.getTempsTotal() > 0) {
+            double heures = t.getTempsTotal() / 3600.0;
+            efficacite = Math.min((t.getQuantiteCollecteeKg() / (t.getDistanceTotale() * heures)) * 10.0, 100.0);
+        }
+
+        return TourneeResponse.builder()
+                .id(t.getId())
+                .code(t.getCode())
+                .statut(t.getStatut())
+                .vergerId(vergerId)
+                .vergerResponsableId(vergerResponsableId)
+                .vergerResponsableNom(vergerResponsableNom) // ✅ CHANGED: Now has value from DB
+                .vergerTypeOlive(vergerTypeOlive)
+                .vergerAgriculteurNom(vergerAgriculteurNom) // ✅ CHANGED: Now has value from DB
+                .vergerSuperficie(vergerSuperficie)
+                .benneId(benneId)
+                .benneNom(benneNom)
+                .benneCapaciteKg(benneCapaciteKg)
+                .tracteurId(tracteurId)
+                .tracteurNom(tracteurNom)
+                .tracteurImmatriculation(tracteurImmatriculation)
+                .travailleurIds(travailleurIds)
+                .travailleurNoms(travailleurNoms)
+                .nbreArbre(t.getNbreArbre())
+                .distanceTotale(t.getDistanceTotale())
+                .tempsTotal(t.getTempsTotal())
+                .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
+                .collecteFinalisee(t.getCollecteFinalisee())
+                .efficacite(efficacite)
+                .observations(t.getObservations())
+                .livraisonDestinationNom(t.getLivraisonDestinationNom())
+                .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                .livraisonEstimeDebut(t.getLivraisonEstimeDebut())
+                .livraisonEstimeFin(t.getLivraisonEstimeFin())
+                .livraisonNotes(t.getLivraisonNotes())
+                .responsablePressoirId(t.getResponsablePressoirId())
+                .responsablePressoirNom(responsablePressoirNom)
+                .pressoirNom(pressoirNom)
+                .pressoirAdresse(pressoirAdresse)
+                .livraisonStartedAt(t.getLivraisonStartedAt())
+                .livraisonCompletedAt(t.getLivraisonCompletedAt())
+                .livraisonEvidenceName(t.getLivraisonEvidenceName())
+                .livraisonEvidenceUrl(t.getLivraisonEvidenceUrl())
+                .dateDebut(t.getDateDebut())
+                .dateFin(t.getDateFin())
+                .dateCreation(t.getDateCreation())
+                .collecteId(collecteId)
+                .collecteCode(collecteCode)
+                .build();
+    }
     private void clearCache() {
         cache.clear();
         lastCacheTime = 0;
@@ -308,7 +579,80 @@ tracteur.setStatut("OCCUPE");
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
+    private TourneeResponse toResponseLight(Tournee t) {
+        // ✅ USE THE SNAPSHOT instead of the reference!
+        Verger v = t.getVergerSnapshot();
 
+        String vergerTypeOlive = null;
+        String vergerAgriculteurNom = null;
+        String vergerId = null;
+        String vergerResponsableId = null;
+        String vergerResponsableNom = null;
+
+        if (v != null) {
+            vergerId = v.getId();
+            vergerTypeOlive = v.getTypeOlive();
+
+            // ✅ CHANGED: Fetch responsable info from DB using the ID from snapshot
+            if (v.getResponsable() != null) {
+                String responsableId = v.getResponsable().getId();
+                if (responsableId != null) {
+                    try {
+                        Utilisateur responsable = utilisateurRepo.findById(responsableId).orElse(null);
+                        if (responsable != null) {
+                            vergerResponsableId = responsable.getId();
+                            vergerResponsableNom = (responsable.getPrenom() != null ? responsable.getPrenom() : "")
+                                    + " " + (responsable.getNom() != null ? responsable.getNom() : "");
+                            vergerResponsableNom = vergerResponsableNom.trim();
+                        }
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Could not fetch responsable: " + e.getMessage());
+                    }
+                }
+            }
+
+            // ✅ CHANGED: Fetch agriculteur name from DB using the ID from snapshot
+            if (v.getAgriculteur() != null) {
+                String agriculteurId = v.getAgriculteur().getId();
+                if (agriculteurId != null) {
+                    try {
+                        Utilisateur agriculteur = utilisateurRepo.findById(agriculteurId).orElse(null);
+                        if (agriculteur != null) {
+                            vergerAgriculteurNom = (agriculteur.getPrenom() != null ? agriculteur.getPrenom() : "")
+                                    + " " + (agriculteur.getNom() != null ? agriculteur.getNom() : "");
+                            vergerAgriculteurNom = vergerAgriculteurNom.trim();
+                        }
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Could not fetch agriculteur: " + e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // ✅ ADDED: Calculate efficiency
+        Double efficacite = calculerEfficacite(t);
+
+        return TourneeResponse.builder()
+                .id(t.getId())
+                .code(t.getCode())
+                .statut(t.getStatut())
+                .dateDebut(t.getDateDebut())
+                .dateFin(t.getDateFin())
+                .dateCreation(t.getDateCreation())
+                .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
+                .distanceTotale(t.getDistanceTotale())
+                .tempsTotal(t.getTempsTotal())  // ✅ ADDED
+                .observations(t.getObservations())
+                .livraisonDestinationNom(t.getLivraisonDestinationNom())
+                .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
+                .vergerId(vergerId)
+                .vergerResponsableId(vergerResponsableId)
+                .vergerResponsableNom(vergerResponsableNom)  // ✅ CHANGED: Now has value
+                .vergerTypeOlive(vergerTypeOlive)
+                .vergerAgriculteurNom(vergerAgriculteurNom)  // ✅ CHANGED: Now has value
+                .efficacite(efficacite)  // ✅ ADDED
+                .build();
+    }
     @Override
     public List<TourneeResponse> getByStatut(StatutTournee statut, UserDetails currentUser) {
         List<Tournee> tournees = tourneeRepo.findByStatut(statut);
@@ -717,7 +1061,6 @@ tracteur.setStatut("OCCUPE");
     @Autowired
     private UtilisateurRepository userRep;
     @Autowired
-    private UtilisateurRepository userRep;
 
     @Override
     public Optional<List<Utilisateur>> getAllTravailleurs() {
@@ -732,26 +1075,87 @@ tracteur.setStatut("OCCUPE");
         if (t == null) {
             return null;
         }
-        Verger v = t.getVerger();
-        String vergerTypeOlive = null, vergerAgriculteurNom = null;
+
+        // ✅ USE THE SNAPSHOT
+        Verger v = t.getVergerSnapshot();
+
+        String vergerTypeOlive = null;
+        String vergerAgriculteurNom = null;
         Double vergerSuperficie = null;
+        String vergerId = null;
+        String vergerResponsableId = null;
+        String vergerResponsableNom = null;
+
         if (v != null) {
+            vergerId = v.getId();
             vergerTypeOlive = v.getTypeOlive();
             vergerSuperficie = v.getSuperficie();
+
+            if (v.getResponsable() != null) {
+                vergerResponsableId = v.getResponsable().getId();
+                // Fetch responsable name from DB
+                try {
+                    Utilisateur responsable = utilisateurRepo.findById(vergerResponsableId).orElse(null);
+                    if (responsable != null) {
+                        vergerResponsableNom = (responsable.getPrenom() != null ? responsable.getPrenom() : "")
+                                + " " + (responsable.getNom() != null ? responsable.getNom() : "");
+                        vergerResponsableNom = vergerResponsableNom.trim();
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+
             if (v.getAgriculteur() != null) {
-                vergerAgriculteurNom = v.getAgriculteur().getPrenom() + " " + v.getAgriculteur().getNom();
+                try {
+                    String agriculteurId = v.getAgriculteur().getId();
+                    Utilisateur agriculteur = utilisateurRepo.findById(agriculteurId).orElse(null);
+                    if (agriculteur != null) {
+                        vergerAgriculteurNom = (agriculteur.getPrenom() != null ? agriculteur.getPrenom() : "")
+                                + " " + (agriculteur.getNom() != null ? agriculteur.getNom() : "");
+                        vergerAgriculteurNom = vergerAgriculteurNom.trim();
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
             }
         }
+
         Ressource benne = t.getBenne();
         Ressource tracteur = t.getTracteur();
+
+        // Extract travailleur names
+        List<String> travailleurNoms = new ArrayList<>();
+        if (t.getTravailleurs() != null) {
+            for (Utilisateur u : t.getTravailleurs()) {
+                if (u != null) {
+                    travailleurNoms.add(u.getPrenom() + " " + u.getNom());
+                }
+            }
+        }
+
+        // Extract responsable pressoir name
+        Utilisateur rp = t.getResponsablePressoir();
+        String responsablePressoirNom = null;
+        String pressoirNom = null;
+        if (rp != null) {
+            responsablePressoirNom = (rp.getPrenom() != null ? rp.getPrenom() : "")
+                    + " " + (rp.getNom() != null ? rp.getNom() : "");
+            if (rp.getPressoir() != null) {
+                pressoirNom = rp.getPressoir().getNom();
+            }
+        }
+
         return TourneeResponse.builder()
                 .id(t.getId())
                 .code(t.getCode())
                 .statut(t.getStatut())
-                .vergerId(v != null ? v.getId() : null)
+                .vergerId(vergerId)
                 .vergerTypeOlive(vergerTypeOlive)
                 .vergerAgriculteurNom(vergerAgriculteurNom)
                 .vergerSuperficie(vergerSuperficie)
+                .vergerResponsableId(vergerResponsableId)
+                .vergerResponsableNom(vergerResponsableNom)  // ✅ ADDED
                 .benneId(benne != null ? benne.getId() : null)
                 .benneNom(benne != null ? benne.getNom() : null)
                 .benneCapaciteKg(benne != null ? benne.getCapaciteKg() : null)
@@ -759,13 +1163,13 @@ tracteur.setStatut("OCCUPE");
                 .tracteurNom(tracteur != null ? tracteur.getNom() : null)
                 .tracteurImmatriculation(tracteur != null ? tracteur.getImmatriculation() : null)
                 .travailleurIds(java.util.Collections.emptyList())
-                .travailleurNoms(java.util.Collections.emptyList())
+                .travailleurNoms(travailleurNoms)  // ✅ ADDED
                 .nbreArbre(t.getNbreArbre())
                 .distanceTotale(t.getDistanceTotale())
                 .tempsTotal(t.getTempsTotal())
                 .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
                 .collecteFinalisee(t.getCollecteFinalisee())
-                .efficacite(null)
+                .efficacite(calculerEfficacite(t))  // ✅ Include efficiency
                 .observations(t.getObservations())
                 .livraisonDestinationNom(t.getLivraisonDestinationNom())
                 .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
@@ -773,8 +1177,8 @@ tracteur.setStatut("OCCUPE");
                 .livraisonEstimeFin(t.getLivraisonEstimeFin())
                 .livraisonNotes(t.getLivraisonNotes())
                 .responsablePressoirId(t.getResponsablePressoirId())
-                .responsablePressoirNom(null)
-                .pressoirNom(null)
+                .responsablePressoirNom(responsablePressoirNom)  // ✅ ADDED
+                .pressoirNom(pressoirNom)  // ✅ ADDED
                 .pressoirAdresse(null)
                 .livraisonStartedAt(t.getLivraisonStartedAt())
                 .livraisonCompletedAt(t.getLivraisonCompletedAt())
@@ -787,121 +1191,4 @@ tracteur.setStatut("OCCUPE");
                 .collecteId(null)
                 .collecteCode(null)
                 .build();
-    }
-    
-    private TourneeResponse toResponse(Tournee t) {
-        // Extract nested data safely
-        Verger v = t.getVerger();
-        String vergerTypeOlive = null;
-        String vergerAgriculteurNom = null;
-        Double vergerSuperficie = null;
-        String vergerId = null;
-
-        if (v != null) {
-            vergerId = v.getId();
-            vergerTypeOlive = v.getTypeOlive();
-            vergerSuperficie = v.getSuperficie();
-            if (v.getAgriculteur() != null) {
-                vergerAgriculteurNom = v.getAgriculteur().getPrenom() + " " + v.getAgriculteur().getNom();
-            }
-        }
-
-        // Extract benne data
-        Ressource benne = t.getBenne();
-        String benneId = null;
-        String benneNom = null;
-        Double benneCapaciteKg = null;
-        if (benne != null) {
-            benneId = benne.getId();
-            benneNom = benne.getNom();
-            benneCapaciteKg = benne.getCapaciteKg();
-        }
-        Ressource tracteur = t.getTracteur();
-        Utilisateur responsablePressoir = t.getResponsablePressoir();
-
-        // Extract tracteur data
-        String tracteurId = null;
-        String tracteurNom = null;
-        String tracteurImmatriculation = null;
-        if (tracteur != null) {
-            tracteurId = tracteur.getId();
-            tracteurNom = tracteur.getNom();
-            tracteurImmatriculation = tracteur.getImmatriculation();
-        }
-
-        // Extract workers data
-        List<String> travailleurIds = new ArrayList<>();
-        List<String> travailleurNoms = new ArrayList<>();
-        if (t.getTravailleurs() != null) {
-            for (Utilisateur u : t.getTravailleurs()) {
-                if (u != null) {
-                    travailleurIds.add(u.getId());
-                    travailleurNoms.add(u.getPrenom() + " " + u.getNom());
-                }
-            }
-        }
-
-        // Extract collecte data
-        Collecte collecte = t.getCollecte();
-        String collecteId = null;
-        String collecteCode = null;
-        if (collecte != null) {
-            collecteId = collecte.getId();
-            collecteCode = collecte.getCode();
-        }
-
-        // Calculate efficiency if needed
-        Double efficacite = null;
-        if (t.getDistanceTotale() != null && t.getDistanceTotale() > 0
-                && t.getQuantiteCollecteeKg() != null && t.getQuantiteCollecteeKg() > 0
-                && t.getTempsTotal() != null && t.getTempsTotal() > 0) {
-            double heures = t.getTempsTotal() / 3600.0;
-            efficacite = Math.min((t.getQuantiteCollecteeKg() / (t.getDistanceTotale() * heures)) * 10.0, 100.0);
-        }
-
-        return TourneeResponse.builder()
-                .id(t.getId())
-                .code(t.getCode())
-                .statut(t.getStatut())
-                .vergerId(vergerId)
-                .vergerTypeOlive(vergerTypeOlive)
-                .vergerAgriculteurNom(vergerAgriculteurNom)
-                .vergerSuperficie(vergerSuperficie)
-                .benneId(benneId)
-                .benneNom(benneNom)
-                .benneCapaciteKg(benneCapaciteKg)
-                .tracteurId(tracteurId)
-                .tracteurNom(tracteurNom)
-                .tracteurImmatriculation(tracteurImmatriculation)
-                .travailleurIds(travailleurIds)
-                .travailleurNoms(travailleurNoms)
-                .nbreArbre(t.getNbreArbre())
-                .distanceTotale(t.getDistanceTotale())
-                .tempsTotal(t.getTempsTotal())
-                .quantiteCollecteeKg(t.getQuantiteCollecteeKg())
-                .collecteFinalisee(t.getCollecteFinalisee())
-                .efficacite(efficacite)
-                .observations(t.getObservations())
-                .livraisonDestinationNom(t.getLivraisonDestinationNom())
-                .livraisonDestinationAdresse(t.getLivraisonDestinationAdresse())
-                .livraisonEstimeDebut(t.getLivraisonEstimeDebut())
-                .livraisonEstimeFin(t.getLivraisonEstimeFin())
-                .livraisonNotes(t.getLivraisonNotes())
-                .responsablePressoirId(responsablePressoir != null ? responsablePressoir.getId() : t.getResponsablePressoirId())
-                .responsablePressoirNom(responsablePressoir != null
-                        ? ((responsablePressoir.getPrenom() != null ? responsablePressoir.getPrenom() : "") + " " + (responsablePressoir.getNom() != null ? responsablePressoir.getNom() : "")).trim()
-                        : null)
-                .pressoirNom(responsablePressoir != null && responsablePressoir.getPressoir() != null ? responsablePressoir.getPressoir().getNom() : null)
-                .pressoirAdresse(responsablePressoir != null && responsablePressoir.getPressoir() != null ? responsablePressoir.getPressoir().getAdresse() : null)
-                .livraisonStartedAt(t.getLivraisonStartedAt())
-                .livraisonCompletedAt(t.getLivraisonCompletedAt())
-                .livraisonEvidenceName(t.getLivraisonEvidenceName())
-                .livraisonEvidenceUrl(t.getLivraisonEvidenceUrl())
-                .dateDebut(t.getDateDebut())
-                .dateFin(t.getDateFin())
-                .dateCreation(t.getDateCreation())
-                .collecteId(collecteId)
-                .collecteCode(collecteCode)
-                .build();
-    }
-}
+    }}

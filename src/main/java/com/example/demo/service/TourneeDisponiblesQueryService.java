@@ -18,6 +18,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Requête paginée des tournées « disponibles » (sans transporteur) avec filtre année et recherche,
@@ -38,8 +39,11 @@ public class TourneeDisponiblesQueryService {
     ) {
         List<Criteria> andParts = new ArrayList<>();
         andParts.add(Criteria.where("statut").in(statuts));
-        andParts.add(Criteria.where("transporteur").is(null));
-
+// Match documents where transporteur field doesn't exist OR is null
+        andParts.add(new Criteria().orOperator(
+                Criteria.where("transporteur").is(null),
+                Criteria.where("transporteur").exists(false)
+        ));
         if (yearOrNull != null && yearOrNull > 0) {
             Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
             cal.clear();
@@ -53,10 +57,11 @@ public class TourneeDisponiblesQueryService {
         }
 
         if (vergerIdsOrNull != null && !vergerIdsOrNull.isEmpty()) {
-            andParts.add(new Criteria().orOperator(
-                    Criteria.where("verger._id").in(vergerIdsOrNull),
-                    Criteria.where("verger.$id").in(vergerIdsOrNull)
-            ));
+            // Convert to ObjectIds - verger is stored as direct ObjectId in MongoDB
+            List<org.bson.types.ObjectId> oids = vergerIdsOrNull.stream()
+                    .map(org.bson.types.ObjectId::new)
+                    .collect(Collectors.toList());
+            andParts.add(Criteria.where("verger").in(oids));
         }
 
         if (StringUtils.hasText(textSearch)) {
@@ -65,6 +70,7 @@ public class TourneeDisponiblesQueryService {
             andParts.add(new Criteria().orOperator(
                     Criteria.where("code").regex(rx),
                     Criteria.where("livraisonDestinationNom").regex(rx),
+
                     Criteria.where("livraisonDestinationAdresse").regex(rx),
                     Criteria.where("observations").regex(rx)
             ));
@@ -75,5 +81,4 @@ public class TourneeDisponiblesQueryService {
         List<Tournee> list = mongoOperations.find(query, Tournee.class);
         long total = mongoOperations.count(Query.query(all), Tournee.class);
         return new PageImpl<>(list, pageable, total);
-    }
-}
+    }}
