@@ -730,7 +730,6 @@ tracteur.setStatut("OCCUPE");
         Utilisateur responsablePressoir = t.getResponsablePressoir();
 
         // Extract tracteur data
-        Ressource tracteur = t.getTracteur();
         String tracteurId = null;
         String tracteurNom = null;
         String tracteurImmatriculation = null;
