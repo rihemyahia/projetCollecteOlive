@@ -16,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import com.example.demo.repository.UtilisateurRepository;
 import java.util.List;
@@ -24,8 +25,9 @@ import java.util.List;
 @RequestMapping("/api/alertes")
 @RequiredArgsConstructor
 public class AlerteController {
-
+@Autowired
     private final AlerteService alerteService;
+@Autowired
     private final UtilisateurRepository utilisateurRepo;
     @PostMapping
     @PreAuthorize("hasRole('AGRICULTEUR')")

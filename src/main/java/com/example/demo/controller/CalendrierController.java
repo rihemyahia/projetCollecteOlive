@@ -4,6 +4,8 @@ import com.example.demo.dto.EvenementCalendrierDTO;
 import com.example.demo.service.CalendrierService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +21,7 @@ import java.util.List;
 @RequestMapping("/api/calendrier")
 @RequiredArgsConstructor
 public class CalendrierController {
-
+@Autowired
     private final CalendrierService calendrierService;
 
     @GetMapping("/verger/{vergerId}/travailleur/{travailleurId}")

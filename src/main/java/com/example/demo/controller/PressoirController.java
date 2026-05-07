@@ -5,6 +5,8 @@ import com.example.demo.model.Tournee;
 import com.example.demo.service.ResponsablePressoirService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,7 +21,7 @@ import java.util.List;
 @CrossOrigin(origins = "http://localhost:4200")
 @PreAuthorize("hasRole('RESPONSABLE_PRESSOIR')")
 public class PressoirController {
-
+@Autowired
     private final ResponsablePressoirService responsablePressoirService;
 
     @GetMapping("/tournees-livrees")

@@ -7,6 +7,8 @@ import com.example.demo.model.enums.StatutVerger;
 import com.example.demo.service.VergerService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,7 +22,7 @@ import java.util.Map;
 @RequestMapping("/api/vergers")
 @RequiredArgsConstructor
 public class VergerController {
-
+@Autowired
     private final VergerService vergerService;
 
     // ── CREATE ────────────────────────────────────────────────────────────────

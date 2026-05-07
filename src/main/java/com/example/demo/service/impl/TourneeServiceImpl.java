@@ -6,6 +6,7 @@ import com.example.demo.dto.TourneeResponse;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.model.*;
 import com.example.demo.model.enums.StatutVerger;
+import com.example.demo.model.enums.TypeRessource;
 import com.example.demo.repository.*;
 import com.example.demo.service.TourneeService;
 import com.example.demo.service.CollecteService;
@@ -246,6 +247,7 @@ public class TourneeServiceImpl implements TourneeService {
         Date dateDebut = req.getDateDebut();
         Date dateFin = req.getDateFin();
         validateDates(dateDebut, dateFin);
+        verifierDateNonPassee(dateDebut);  // ← AJOUTER CETTE LIGNE
 
         Verger verger = vergerRepo.findById(req.getVergerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Verger introuvable : " + req.getVergerId()));
@@ -595,6 +597,17 @@ tracteur.setStatut("OCCUPE");
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
+ // ========== VÉRIFICATION DATE PASSÉE ==========
+
+    private void verifierDateNonPassee(Date dateDebut) {
+        Date aujourdhui = new Date();
+        if (dateDebut.before(aujourdhui)) {
+            throw new IllegalStateException(
+                "Impossible de créer/modifier une tournée avec une date dans le passé. " +
+                "📅 Date demandée: " + fmt(dateDebut) + " | 📅 Date actuelle: " + fmt(aujourdhui)
+            );
+        }
+    }
     private TourneeResponse toResponseLight(Tournee t) {
         // ✅ USE THE SNAPSHOT instead of the reference!
         Verger v = t.getVergerSnapshot();
@@ -817,6 +830,7 @@ tracteur.setStatut("OCCUPE");
         Date newDebut = req.getDateDebut() != null ? req.getDateDebut() : tournee.getDateDebut();
         Date newFin = req.getDateFin() != null ? req.getDateFin() : tournee.getDateFin();
         validateDates(newDebut, newFin);
+        verifierDateNonPassee(req.getDateDebut());  // ← AJOUTER CETTE LIGNE
 
         boolean datesChanged = !newDebut.equals(tournee.getDateDebut()) || !newFin.equals(tournee.getDateFin());
 

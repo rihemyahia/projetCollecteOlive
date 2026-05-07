@@ -110,14 +110,7 @@ public class ResponsableController {
         return ResponseEntity.ok(travailleurServiceImpl.trouverTravailleurParId(id));
     }
 
-    @PutMapping("/travailleurs/{id}")
-    public ResponseEntity<?> updateTravailleur(@PathVariable String id, @RequestBody Utilisateur travailleur) {
-        Utilisateur updated = travailleurServiceImpl.mettreAJourTravailleur(id, travailleur);
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Travailleur modifié avec succès");
-        response.put("travailleur", updated);
-        return ResponseEntity.ok(response);
-    }
+    
 
     @DeleteMapping("/travailleurs/{id}")
     public ResponseEntity<?> deleteTravailleur(@PathVariable String id) {

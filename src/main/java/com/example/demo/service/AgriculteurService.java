@@ -6,9 +6,6 @@ import java.util.List;
 
 public interface AgriculteurService {
 
-    Utilisateur creerAgriculteur(Utilisateur agriculteur);
-    
-    Utilisateur mettreAJourAgriculteur(String id, Utilisateur agriculteur);
     
     Utilisateur trouverAgriculteurParId(String id);
     

@@ -6,7 +6,6 @@ import java.util.List;
 
 public interface TravailleurService {
 
-    Utilisateur creerTravailleur(Utilisateur travailleur);
     
     List<Utilisateur> listerTravailleurs();
     
@@ -14,7 +13,6 @@ public interface TravailleurService {
     
     Utilisateur trouverTravailleurParId(String id);
     
-    Utilisateur mettreAJourTravailleur(String id, Utilisateur travailleur);
     
     void supprimerTravailleur(String id);
 }

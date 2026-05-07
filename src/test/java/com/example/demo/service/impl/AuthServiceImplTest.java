@@ -2,8 +2,8 @@ package com.example.demo.service.impl;
 
 import com.example.demo.config.JwtUtils;
 import com.example.demo.model.Role;
-import com.example.demo.model.TypeTravailleur;
 import com.example.demo.model.Utilisateur;
+import com.example.demo.model.enums.TypeTravailleur;
 import com.example.demo.repository.UtilisateurRepository;
 import com.example.demo.utils.PasswordGeneratorUtil;
 import org.junit.jupiter.api.BeforeEach;

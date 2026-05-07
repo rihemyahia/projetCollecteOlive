@@ -1,8 +1,9 @@
 package com.example.demo.repository;
 
 import com.example.demo.model.Ressource;
-import com.example.demo.model.TypeRessource;
 import com.example.demo.model.Utilisateur;
+import com.example.demo.model.enums.TypeRessource;
+
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;

@@ -1,7 +1,7 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.model.Ressource;
-import com.example.demo.model.TypeRessource;
+import com.example.demo.model.enums.TypeRessource;
 import com.example.demo.repository.RessourceRepository;
 import com.example.demo.service.BenneServices;
 import com.example.demo.service.RessourceService;

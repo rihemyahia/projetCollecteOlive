@@ -1,7 +1,7 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.model.Ressource;
-import com.example.demo.model.TypeRessource;
+import com.example.demo.model.enums.TypeRessource;
 import com.example.demo.repository.RessourceRepository;
 import com.example.demo.service.RessourceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +38,7 @@ public class RessourceServiceImplTest {
         benne = new Ressource();
         benne.setId("benne-123");
         benne.setNom("Benne Test");
-        benne.setType(TypeRessource.BENNE);
+        benne.setType(com.example.demo.model.enums.TypeRessource.BENNE);
         benne.setCapaciteKg(1000.0);
         benne.setQuantiteChargeeActuelle(0.0);
         benne.setTauxRemplissage(0.0);
@@ -48,7 +48,7 @@ public class RessourceServiceImplTest {
         tracteur = new Ressource();
         tracteur.setId("tracteur-123");
         tracteur.setNom("Tracteur Test");
-        tracteur.setType(TypeRessource.TRACTEUR);
+        tracteur.setType(com.example.demo.model.enums.TypeRessource.TRACTEUR);
         tracteur.setStatut("DISPONIBLE");
     }
 

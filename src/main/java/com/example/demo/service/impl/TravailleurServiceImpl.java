@@ -60,21 +60,6 @@ public class TravailleurServiceImpl  implements TravailleurService{
         return utilisateur;
     }
 
-    public Utilisateur mettreAJourTravailleur(String id, Utilisateur travailleur) {
-        Utilisateur existant = trouverTravailleurParId(id);
-
-        existant.setNom(travailleur.getNom());
-        existant.setPrenom(travailleur.getPrenom());
-        existant.setTelephone(travailleur.getTelephone());
-        existant.setAdresse(travailleur.getAdresse());
-        existant.setCin(travailleur.getCin());
-        existant.setSpecialites(travailleur.getSpecialites());
-        existant.setDateEmbauche(travailleur.getDateEmbauche());
-        existant.setSalaire(travailleur.getSalaire());
-        existant.setStatutEmploye(travailleur.getStatutEmploye());
-
-        return utilisateurRepository.save(existant);
-    }
 
     public void supprimerTravailleur(String id) {
         Utilisateur travailleur = trouverTravailleurParId(id);

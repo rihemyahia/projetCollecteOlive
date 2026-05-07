@@ -2,6 +2,8 @@ package com.example.demo.controller;
 
 import com.example.demo.service.PredictionRendementAIService;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +15,7 @@ import java.util.Map;
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
 public class PredictionAIController {
-
+@Autowired
     private final PredictionRendementAIService predictionService;
     
     @GetMapping("/prediction/verger/{vergerId}")
