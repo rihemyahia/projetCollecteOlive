@@ -21,15 +21,15 @@ public class ProjetCollecteOliveApplication {
     public static void main(String[] args) {
         SpringApplication.run(ProjetCollecteOliveApplication.class, args);
         System.out.println("========================================");
-        System.out.println("🌿 Projet Collecte Olives démarré !");
-        System.out.println("📍 http://localhost:8080");
+        System.out.println(" Projet Collecte Olives démarré !");
+        System.out.println(" http://localhost:8080");
         System.out.println("========================================");
     }
 
     @Bean
     public CommandLineRunner initData(UtilisateurRepository utilisateurRepository) {
         return args -> {
-            System.out.println("\n🚀 Initialisation des données de démarrage...");
+            System.out.println("\n Initialisation des données de démarrage...");
 
             // ===== CREATE ADMIN USER =====
             if (utilisateurRepository.findByEmail("admin@cooperative.com").isEmpty()) {
@@ -47,12 +47,12 @@ public class ProjetCollecteOliveApplication {
                 admin.setMotDePasse(encoder.encode("admin123"));
 
                 utilisateurRepository.save(admin);
-                System.out.println("✅ Utilisateur ADMIN créé avec succès !");
-                System.out.println("   📧 Email: admin@cooperative.com");
-                System.out.println("   🔑 Mot de passe: admin123");
-                System.out.println("   👤 Rôle: ADMIN");
+                System.out.println("Utilisateur ADMIN créé avec succès !");
+                System.out.println("  Email: admin@cooperative.com");
+                System.out.println("  Mot de passe: admin123");
+                System.out.println("  Rôle: ADMIN");
             } else {
-                System.out.println("ℹ️ Utilisateur ADMIN existe déjà");
+                System.out.println(" Utilisateur ADMIN existe déjà");
             }
 
             // ===== CREATE RESPONSABLE USER =====
@@ -72,13 +72,13 @@ public class ProjetCollecteOliveApplication {
 
                 utilisateurRepository.save(responsable);
 
-                System.out.println("✅ Utilisateur RESPONSABLE créé avec succès !");
-                System.out.println("   📧 Email: responsable@cooperative.com");
-                System.out.println("   🔑 Mot de passe: responsable123");
-                System.out.println("   👤 Rôle: RESPONSABLE");
-                System.out.println("   👤 Nom: Faiza Ghozzi");
+                System.out.println(" Utilisateur RESPONSABLE créé avec succès !");
+                System.out.println(" Email: responsable@cooperative.com");
+                System.out.println(" Mot de passe: responsable123");
+                System.out.println(" Rôle: RESPONSABLE");
+                System.out.println(" Nom: Faiza Ghozzi");
             } else {
-                System.out.println("ℹ️ Utilisateur RESPONSABLE existe déjà");
+                System.out.println(" Utilisateur RESPONSABLE existe déjà");
             }
 
             // ===== OPTIONAL: Create a test AGRICULTEUR user =====
@@ -98,45 +98,20 @@ public class ProjetCollecteOliveApplication {
 
                 utilisateurRepository.save(agriculteur);
 
-                System.out.println("✅ Utilisateur AGRICULTEUR créé avec succès !");
-                System.out.println("   📧 Email: agriculteur@test.com");
-                System.out.println("   🔑 Mot de passe: agriculteur123");
-                System.out.println("   👤 Rôle: AGRICULTEUR");
+                System.out.println(" Utilisateur AGRICULTEUR créé avec succès !");
+                System.out.println("    Email: agriculteur@test.com");
+                System.out.println("    Mot de passe: agriculteur123");
+                System.out.println("    Rôle: AGRICULTEUR");
             }
 
-            // ===== OPTIONAL: Create a test EQUIPE_RECOLTE user =====
-            if (utilisateurRepository.findByEmail("equipe@recolte.com").isEmpty()) {
-                Utilisateur equipeRecolte = new Utilisateur();
-                equipeRecolte.setEmail("equipe@recolte.com");
-                equipeRecolte.setPrenom("Karim");
-                equipeRecolte.setNom("Said");
-                equipeRecolte.setTelephone("+216 77 777 777");
-                equipeRecolte.setRole(Role.TRAVAILLEUR);
-                equipeRecolte.setAdresse("Sousse, Tunisie");
-                equipeRecolte.setEstActif(true);
-                List<String> specialites = new ArrayList<>();
-                specialites.add("cueillette");
-                specialites.add("ramassage");
-                equipeRecolte.setSpecialites(specialites);  // ✅ Avec valeurs                equipeRecolte.setDateCreation(new Date());
 
-                BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-                equipeRecolte.setMotDePasse(encoder.encode("equipe123"));
-
-                utilisateurRepository.save(equipeRecolte);
-
-                System.out.println("✅ Utilisateur EQUIPE_RECOLTE créé avec succès !");
-                System.out.println("   📧 Email: equipe@recolte.com");
-                System.out.println("   🔑 Mot de passe: equipe123");
-                System.out.println("   👤 Rôle: TRAVAILLEUR");
-            }
-
-            System.out.println("\n🎉 Initialisation des données terminée !");
+            System.out.println("\n Initialisation des données terminée !");
             System.out.println("========================================");
-            System.out.println("📋 Résumé des utilisateurs disponibles:");
-            System.out.println("   👑 ADMIN: admin@cooperative.com / admin123");
-            System.out.println("   👤 RESPONSABLE:   / responsable123");
-            System.out.println("   👨‍🌾 AGRICULTEUR: agriculteur@test.com / agriculteur123");
-            System.out.println("   🚜 EQUIPE_RECOLTE: equipe@recolte.com / equipe123");
+            System.out.println(" Résumé des utilisateurs disponibles:");
+            System.out.println("    ADMIN: admin@cooperative.com / admin123");
+            System.out.println("    RESPONSABLE:   / responsable123");
+            System.out.println("    AGRICULTEUR: agriculteur@test.com / agriculteur123");
+            System.out.println("    EQUIPE_RECOLTE: equipe@recolte.com / equipe123");
             System.out.println("========================================\n");
         };
     }
