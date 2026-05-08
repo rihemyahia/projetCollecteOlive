@@ -23,7 +23,7 @@ public interface VergerService {
     void desactiver(String id);
     void verifierProprietaireVerger(String vergerId, UserDetails userDetails);
     void verifierProprietaire(String agriculteurId, UserDetails userDetails);
-
+    void verifierResponsableVerger(String vergerId, UserDetails userDetails);
     // ── Geolocation ─────────────────────────────────────────────────────────
 
     /**

@@ -43,9 +43,21 @@ public class VergerController {
 
         boolean isAgriculteur = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_AGRICULTEUR"));
+
+        boolean isResponsable = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE"));
+
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
         if (isAgriculteur) {
             vergerService.verifierProprietaireVerger(id, userDetails);
         }
+
+        if (isResponsable && !isAdmin) {
+            vergerService.verifierResponsableVerger(id, userDetails);
+        }
+
         return ResponseEntity.ok(vergerService.getById(id));
     }
 
@@ -53,6 +65,7 @@ public class VergerController {
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
     public ResponseEntity<List<VergerResponse>> getAll(
             @AuthenticationPrincipal UserDetails userDetails) {
+
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
@@ -71,9 +84,21 @@ public class VergerController {
 
         boolean isAgriculteur = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_AGRICULTEUR"));
+
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
         if (isAgriculteur) {
             vergerService.verifierProprietaire(agriculteurId, userDetails);
         }
+
+        if (!isAdmin) {
+            vergerService.verifierResponsablePossedeAgriculteur(
+                    agriculteurId,
+                    userDetails
+            );
+        }
+
         return ResponseEntity.ok(vergerService.getByAgriculteur(agriculteurId));
     }
 
@@ -85,22 +110,12 @@ public class VergerController {
 
     // ── GEOLOCATION ENDPOINTS ─────────────────────────────────────────────────
 
-    /**
-     * GET /api/vergers/carte
-     * Returns all georeferenced vergers — for the RESPONSABLE/ADMIN map view.
-     * Only returns vergers that have a location set.
-     */
     @GetMapping("/carte")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
     public ResponseEntity<List<VergerResponse>> getCarteAll() {
         return ResponseEntity.ok(vergerService.getAllWithLocation());
     }
 
-    /**
-     * GET /api/vergers/carte/agriculteur/{agriculteurId}
-     * Returns georeferenced vergers belonging to the given agriculteur.
-     * An AGRICULTEUR can only see their own vergers.
-     */
     @GetMapping("/carte/agriculteur/{agriculteurId}")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN', 'AGRICULTEUR')")
     public ResponseEntity<List<VergerResponse>> getCarteByAgriculteur(
@@ -109,17 +124,14 @@ public class VergerController {
 
         boolean isAgriculteur = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_AGRICULTEUR"));
+
         if (isAgriculteur) {
             vergerService.verifierProprietaire(agriculteurId, userDetails);
         }
+
         return ResponseEntity.ok(vergerService.getByAgriculteurWithLocation(agriculteurId));
     }
 
-    /**
-     * GET /api/vergers/proches?longitude=10.76&latitude=34.74&rayon=5000
-     * Find vergers within 'rayon' metres of the given point.
-     * Default radius: 10 000 m (10 km).
-     */
     @GetMapping("/proches")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN', 'AGRICULTEUR')")
     public ResponseEntity<List<VergerResponse>> getProches(
@@ -129,11 +141,6 @@ public class VergerController {
         return ResponseEntity.ok(vergerService.findNearby(longitude, latitude, rayon));
     }
 
-    /**
-     * PATCH /api/vergers/{id}/localisation
-     * Update ONLY the GPS location of a verger (no other fields changed).
-     * Body: { "latitude": 34.74, "longitude": 10.76, "adresseIndicative": "..." }
-     */
     @PatchMapping("/{id}/localisation")
     @PreAuthorize("hasAnyRole('RESPONSABLE', 'ADMIN')")
     public ResponseEntity<VergerResponse> mettreAJourLocalisation(
@@ -158,26 +165,33 @@ public class VergerController {
 
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
         boolean isAgriculteur = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_AGRICULTEUR"));
+
+        boolean isResponsable = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE"));
+
         if (isAgriculteur) {
             vergerService.verifierProprietaireVerger(id, userDetails);
         }
-        // Only ADMIN can change responsable/agriculteur relationship fields.
+
+        if (isResponsable && !isAdmin) {
+            vergerService.verifierResponsableVerger(id, userDetails);
+        }
+
         if (!isAdmin) {
             req.setResponsableId(null);
         }
-        // AGRICULTEUR cannot manually override status.
+
         if (isAgriculteur) {
             req.setStatut(null);
             req.setStatutOverrideReason(null);
         }
+
         return ResponseEntity.ok(vergerService.mettreAJour(id, req));
     }
 
-    /**
-     * Admin-only update: can change responsableId and agriculteurId (ownership/management).
-     */
     @PutMapping("/{id}/admin")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<VergerResponse> mettreAJourAdmin(
@@ -195,27 +209,63 @@ public class VergerController {
 
         boolean isAgriculteur = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_AGRICULTEUR"));
+
+        boolean isResponsable = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE"));
+
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
         if (isAgriculteur) {
             vergerService.verifierProprietaireVerger(id, userDetails);
         }
+
+        if (isResponsable && !isAdmin) {
+            vergerService.verifierResponsableVerger(id, userDetails);
+        }
+
         if (Boolean.TRUE.equals(req.getClearOverride())) {
             return ResponseEntity.ok(vergerService.clearStatutOverride(id));
         }
+
         if (req.getStatut() == null) {
             throw new IllegalArgumentException("Le statut est obligatoire");
         }
+
         if (req.getReason() == null || req.getReason().isBlank()) {
             throw new IllegalArgumentException("La raison du changement manuel est obligatoire");
         }
-        return ResponseEntity.ok(vergerService.changerStatut(id, req.getStatut(), req.getReason().trim(), userDetails.getUsername()));
+
+        return ResponseEntity.ok(
+                vergerService.changerStatut(
+                        id,
+                        req.getStatut(),
+                        req.getReason().trim(),
+                        userDetails.getUsername()
+                )
+        );
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('RESPONSABLE','ADMIN')")
-    public ResponseEntity<Void> desactiver(@PathVariable String id) {
+    public ResponseEntity<Void> desactiver(
+            @PathVariable String id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        boolean isResponsable = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE"));
+
+        if (isResponsable && !isAdmin) {
+            vergerService.verifierResponsableVerger(id, userDetails);
+        }
+
         vergerService.desactiver(id);
+
         return ResponseEntity.noContent().build();
     }
 }

@@ -316,8 +316,7 @@ public class VergerServiceImpl implements VergerService {
     @Override
     public void verifierProprietaireVerger(String vergerId, UserDetails userDetails) {
         boolean isPrivileged = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE")
-                        || a.getAuthority().equals("ROLE_ADMIN"));
+    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         if (isPrivileged) return;
 
         Verger v = findOrThrow(vergerId);
@@ -456,4 +455,28 @@ public class VergerServiceImpl implements VergerService {
             verger.setDateDerniereRecolte(new Date());
         }
     }
+    @Override
+public void verifierResponsableVerger(String vergerId, UserDetails userDetails) {
+
+    // Admin bypasses restriction
+    boolean isAdmin = userDetails.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+    if (isAdmin) return;
+
+    Verger verger = findOrThrow(vergerId);
+
+    Utilisateur responsable = utilisateurRepo
+            .findByEmail(userDetails.getUsername())
+            .orElseThrow(() ->
+                    new ResourceNotFoundException("Responsable introuvable"));
+
+    if (verger.getResponsable() == null ||
+        !verger.getResponsable().getId().equals(responsable.getId())) {
+
+        throw new AccessDeniedException(
+                "Vous n'êtes pas responsable de ce verger"
+        );
+    }
+}
 }

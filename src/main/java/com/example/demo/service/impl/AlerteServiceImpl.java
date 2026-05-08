@@ -241,8 +241,7 @@ public class AlerteServiceImpl implements AlerteService {
     @Override
     public void verifierProprietaireAlerte(String alerteId, UserDetails userDetails) {
         boolean isPrivileged = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_RESPONSABLE")
-                        || a.getAuthority().equals("ROLE_ADMIN"));
+    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         if (isPrivileged) return;
         AlerteTerrain alerte = findOrThrow(alerteId);
         if (!alerte.getAgriculteur().getEmail().equals(userDetails.getUsername())) {
